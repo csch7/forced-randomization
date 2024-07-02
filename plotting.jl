@@ -37,8 +37,8 @@ function time_hists(times::Array, fname::String)
     plts = []
     pallete = cgrad(:blues, 3)
 
-    titles = ["F0 Low Supply", "F0 Medium Supply", "F0 High Supply","F1 Low Supply", "F1 Medium Supply", "F1 High Supply",
-    "F2a Low Supply", "F2a Medium Supply", "F2a High Supply","F2b Low Supply", "F2b Medium Supply", "F2b High Supply"]
+    titles = ["F0a Low Supply", "F0a Medium Supply", "F0a High Supply","F0b Low Supply", "F0b Medium Supply", "F0b High Supply",
+    "F1a Low Supply", "F1a Medium Supply", "F1a High Supply","F1b Low Supply", "F1b Medium Supply", "F1b High Supply"]
 
     for i in 1:length(eachrow(times))
         p = histogram(times[i,:], legend=false, bins=20, color=pallete[(i-1)%3+1])
@@ -63,7 +63,7 @@ end
 
 # Export all statistics for time distribution to csv
 function export_time_stats_csv(times::Array, fname::String)
-    irt_approaches = String["F0","F0","F0","F1","F1","F1","F2a","F2a","F2a","F2b","F2b","F2b"]
+    irt_approaches = String["F0a","F0a","F0a","F0b","F0b","F0b","F1a","F1a","F1a","F1b","F1b","F1b"]
     resupp_strategies = String["Low","Medium","High","Low","Medium","High","Low","Medium","High","Low","Medium","High"]
     mat = [irt_approaches, resupp_strategies, minimum.(eachrow(times)), quantile.(eachrow(times), 0.25), median.(eachrow(times)) ,
             quantile.(eachrow(times), 0.75), maximum.(eachrow(times)), mean.(eachrow(times)), std.(eachrow(times)), quantile.(eachrow(times), 0.9)]
@@ -73,7 +73,7 @@ end
 
 # Export "stat" of all characterstics to csv
 function export_csv_stat(chars::Array, labels::Array, fname::String, stat::Function)
-    irt_approaches = ["F0" "F0" "F0" "F1" "F1" "F1" "F2a" "F2a" "F2a" "F2b" "F2b" "F2b"]
+    irt_approaches = ["F0a","F0a","F0a","F0b","F0b","F0b","F1a","F1a","F1a","F1b","F1b","F1b"]
     resupp_strategies = ["Low" "Medium" "High" "Low" "Medium" "High" "Low" "Medium" "High" "Low" "Medium" "High"]
     mat = vcat(irt_approaches, resupp_strategies, reduce(hcat, stat(chars[:,1,:],dims=2)), reduce(hcat, stat(chars[:,2,:],dims=2)), reduce(hcat, stat(chars[:,3,:],dims=2)), reduce(hcat, stat(chars[:,4,:],dims=2)), 
     reduce(hcat, stat(chars[:,5,:],dims=2)), reduce(hcat, stat(chars[:,6,:],dims=2)), reduce(hcat, stat(chars[:,7,:],dims=2)), reduce(hcat, stat(chars[:,8,:],dims=2)))
