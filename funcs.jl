@@ -48,14 +48,14 @@ function setParams( scen::Int64, cap::Int64 )
 
     if(scen%3==1) # Low supply strategy
         if(scen<5)
-            if(scen==1)  # F0
+            if(scen==1)  # F0a
                 return low_resup , low_init , low_crit , false , false , 0
-            else         # F1
+            else         # F0b
                 return low_resup , low_init , low_crit , true , false , 0
             end
-        elseif (scen==7) # F2a
+        elseif (scen==7) # F1a
             return low_resup , low_init , low_crit , true , false , cap
-        else             # F2b
+        else             # F1b
             return low_resup , low_init , low_crit , true , true , cap
         end
 
