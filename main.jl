@@ -10,14 +10,14 @@ include("Simulation.jl")
 
 # Constant Parameters
 
-# SAMPLE_SIZE = 500                   # Total number of patients
-SAMPLE_SIZE = 100
+SAMPLE_SIZE = 500                   # Total number of patients
+# SAMPLE_SIZE = 100                   # Smaller sample size
 TREATMENT_ARMS = 2                  # Number of treatments
 ALLOC_RATIO = (1,1)                 # Ratio of treatments in each block
 BLOCK_SIZE = 4                      # Number of patients allocated to each block
-# CENTERS = 80                        # Number of centers
-CENTERS = 16 
-RESUPPLY_PERIOD = 7                 # Number of days after which resupply is evaluateed and requested
+CENTERS = 80                        # Number of centers
+# CENTERS = 16                        # Smaller number of centers (for smaller sample size)
+RESUPPLY_PERIOD = 7                 # Number of days after which resupply is evaluated and requested
 RESUPPLY_TIME = 3                   # Time it takes supplies to reach sites
 KIT_COST = 10000                    # Price of one treatment kit
 SHIP_COST = 100                     # Price of shipping
@@ -65,8 +65,8 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
 
             next_supply_check = RESUPPLY_PERIOD             # Keeps track of when the supply needs to be checked           
             next_resupply = next_supply_check+RESUPPLY_TIME # Keeps track of when the supply actually arrives at the centers (constant for all centers)
-            treatments_skipped = 0                          # Keeps track of how many treatments have been skipped over in specification F2a
-            forward_treated = Vector{Int64}(undef, 0)       # Keeps track of which treatments (forward) have already been allocated (relevant in F2b)
+            treatments_skipped = 0                          # Keeps track of how many treatments have been skipped over in specification F1a
+            forward_treated = Vector{Int64}(undef, 0)       # Keeps track of which treatments (forward) have already been allocated (relevant in F1b)
             sent_supply = Dict()                            # Keeps track of the supplies which will be in the center once shipment arrives (keys: centers, values: supply)
             need_supply = Set()                             # Keeps track of which centers need supply (set so that no duplicates happen)
             treatments_used = zeros(Int64, TREATMENT_ARMS)  # List of length TREATMENT_ARMS, where each index is the amount of that supply used (needed for treatment imbalance)
@@ -127,7 +127,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                     for j in 1:num_delayed
                         # Perform simulation.
                         if (!fr_allowed)
-                            center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F0(
+                            center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F0a(
                                 center_supplies,        # Current supplies
                                 delayed_patients[j],    # Relevant center
                                 i-patients_sent_home-tot_delayed-(length(delayed_patients)-num_delayed),  # Index of next unused treatment. When patients are waitlisted, treatment index should not increase.
@@ -140,7 +140,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                                 critical_pt,            # Needed to check resupply
                                 TREATMENT_ARMS)         # Needed to check if all treatments are missing
                         elseif (cap==0)
-                            center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F1(
+                            center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F0b(
                                 center_supplies, 
                                 delayed_patients[j], 
                                 i-patients_sent_home-tot_delayed-(length(delayed_patients)-num_delayed),
@@ -153,7 +153,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                                 critical_pt,
                                 TREATMENT_ARMS)
                         elseif (!backfill_enabled)
-                            center_supplies, treatments_used, need_supply, delayed_patients, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F2a(
+                            center_supplies, treatments_used, need_supply, delayed_patients, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F1a(
                                 center_supplies,
                                 delayed_patients[j], 
                                 i-tot_delayed-(length(delayed_patients)-num_delayed), 
@@ -168,7 +168,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                                 cap,                        # Passed in to modify/check if FR gets disabled
                                 TREATMENT_ARMS          )   # Needed to check if all supply is missing
                         else
-                            center_supplies, treatments_used, need_supply, delayed_patients, forward_treated, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F2b(
+                            center_supplies, treatments_used, need_supply, delayed_patients, forward_treated, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F1b(
                                 center_supplies, 
                                 delayed_patients[j], 
                                 i-tot_delayed-(length(delayed_patients)-num_delayed), 
@@ -205,7 +205,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
 
                 # Perform simulation as normal
                 if (!fr_allowed) # If forced randomization isn't allowed
-                    center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F0(
+                    center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F0a(
                         center_supplies, 
                         center, 
                         i+treatments_skipped-patients_sent_home-tot_delayed-length(delayed_patients), # Treatment index, treatments_skipped=0 if this is the initial specification
@@ -219,7 +219,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                         TREATMENT_ARMS)
                 else # If forced randomization is allowed, with cap=0
                     if (cap==0)
-                        center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F1(
+                        center_supplies, treatments_used, need_supply, patients_sent_home, num_patients = F0b(
                             center_supplies, 
                             center, 
                             i-patients_sent_home-tot_delayed-length(delayed_patients),      # i increases on patient sent home, but treatment index shouldn't.
@@ -232,7 +232,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                             critical_pt,
                             TREATMENT_ARMS)
                     elseif (!backfill_enabled) # If forced randomization is allowed, with no backfilling
-                        center_supplies, treatments_used, need_supply, delayed_patients, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F2a(
+                        center_supplies, treatments_used, need_supply, delayed_patients, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F1a(
                             center_supplies, 
                             center, 
                             i-tot_delayed-length(delayed_patients), # i increases once when a "delayed patient" is hit, and once again when the delayed patient is allocated.
@@ -247,7 +247,7 @@ for (bi, BETA) ∈ enumerate(BETA_OPTS)
                             cap, 
                             TREATMENT_ARMS)
                     else # If forced randomization is allowed, with backfilling
-                        center_supplies, treatments_used, need_supply, delayed_patients, forward_treated, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F2b(
+                        center_supplies, treatments_used, need_supply, delayed_patients, forward_treated, treatments_skipped, patients_force_allocated, num_patients, fr_allowed = F1b(
                             center_supplies, 
                             center, 
                             i-tot_delayed-length(delayed_patients), 
