@@ -1,6 +1,6 @@
 
 # Perform simulation with forced randomization disabled
-function F0(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, 
+function F0a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, 
     delayed_patients::Array, patients_sent_home::Int64, num_patients::Int64, critical_pt::Int64, TREATMENT_ARMS::Int64)
 
     # When all supplies are available
@@ -29,12 +29,12 @@ end
 
 
 # Perform simulation with forced randomization enabled, but initial cap set to 0
-function F1(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, 
+function F0b(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, 
     delayed_patients::Array, patients_sent_home::Int64, num_patients::Int64, critical_pt::Int64, TREATMENT_ARMS::Int64)
 
     
     # When the associated supply is available
-    if (supplies[center][blocks[treatment_index]]!=0)       # Only difference between F0 and F1
+    if (supplies[center][blocks[treatment_index]]!=0)       # Only difference between F0a and F0b
         supplies[center][blocks[treatment_index]]-=1        # Take one supply out of the center
         treatments_used[blocks[treatment_index]]+=1
         
@@ -59,7 +59,7 @@ end
 
 
 # Perform simulation with forced randomization enabled, with no backfilling
-function F2a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, delayed_patients::Array,
+function F1a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, delayed_patients::Array,
     treatments_skipped::Int64, num_patients::Int64, critical_pt::Int64, patients_FA::Int64, cap::Int64, TREATMENT_ARMS::Int64)
 
     # FR always enabled at first
@@ -105,7 +105,7 @@ function F2a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_u
         patients_FA+=1
 
         cap-=1
-        # Once the cap hits 0, default to F0
+        # Once the cap hits 0, default to F0a
         if (cap==0) 
             fr_enabled = false 
         end
@@ -117,7 +117,7 @@ end
 
 
 # Perform simulation with forced randomization enabled, with backfilling.
-function F2b(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, delayed_patients::Array,
+function F1b(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, delayed_patients::Array,
     forward_treated::Vector{Int64}, treatments_skipped::Int64, num_patients::Int64, critical_pt::Int64, patients_FA::Int64, cap::Int64, TREATMENT_ARMS::Int64)
 
     fr_enabled = true
