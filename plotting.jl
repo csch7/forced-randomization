@@ -73,7 +73,7 @@ end
 
 # Export "stat" of all characterstics to csv
 function export_csv_stat(chars::Array, labels::Array, fname::String, stat::Function)
-    irt_approaches = ["F0a","F0a","F0a","F0b","F0b","F0b","F1a","F1a","F1a","F1b","F1b","F1b"]
+    irt_approaches = ["F0a" "F0a" "F0a" "F0b" "F0b" "F0b" "F1a" "F1a" "F1a" "F1b" "F1b" "F1b"]
     resupp_strategies = ["Low" "Medium" "High" "Low" "Medium" "High" "Low" "Medium" "High" "Low" "Medium" "High"]
     mat = vcat(irt_approaches, resupp_strategies, reduce(hcat, stat(chars[:,1,:],dims=2)), reduce(hcat, stat(chars[:,2,:],dims=2)), reduce(hcat, stat(chars[:,3,:],dims=2)), reduce(hcat, stat(chars[:,4,:],dims=2)), 
     reduce(hcat, stat(chars[:,5,:],dims=2)), reduce(hcat, stat(chars[:,6,:],dims=2)), reduce(hcat, stat(chars[:,7,:],dims=2)), reduce(hcat, stat(chars[:,8,:],dims=2)))
