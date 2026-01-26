@@ -1,7 +1,18 @@
 
 # Perform simulation with forced randomization disabled
-function F0a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, 
-    delayed_patients::Array, patients_sent_home::Int64, num_patients::Int64, critical_pt::Int64, TREATMENT_ARMS::Int64)
+function F0a(
+    supplies::Dict,
+    center::Int64, 
+    treatment_index::Int64, 
+    treatments_used::Vector{Int64}, 
+    blocks::Array{Int64}, 
+    need_supply::Set, 
+    delayed_patients::Array, 
+    patients_sent_home::Int64, 
+    num_patients::Int64, 
+    critical_pt::Int64, 
+    TREATMENT_ARMS::Int64
+    )
 
     # When all supplies are available
     if (length(findall(iszero, (supplies[center])))==0)
@@ -20,7 +31,7 @@ function F0a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_u
     # When a supply is missing 
     else 
         patients_sent_home+=1
-        num_patients+=1         # Take one more patient from patients list to accomadate for missing patient
+        num_patients+=1         # Take one more patient from patients list to accommadate for missing patient
     end
 
     return supplies, treatments_used, need_supply, patients_sent_home, num_patients # Return all modified parameters

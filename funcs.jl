@@ -32,10 +32,17 @@ high_crit = 2
     return patients
 end
 
+@view function generateStrata(num_patients::Int64, p::float64)
+    strata_list = rand(Uniform(0,1), num_patients)
+    strata_list .-= 0.6
+    strata_list = ceil(Int8, strata_list)
+    return strata_list
+end
+
 # Generate treatment list for PBD
 @views function generateTreatList(ratio::Tuple, blocks::Array{Int64}, sample_size::Int64, treat_arms::Int64, block_size::Int64 )
     block_options = [t for t in 1:treat_arms for a in 1:(ratio[t]/sum(ratio)*block_size)]
-    for i in 1:convert(Int64, ceil(2*sample_size/block_size)) # Generate double the treatments needed (for patients sent home/FA) (may need more for very fast recruitment rate)
+    for _ in 1:convert(Int64, ceil(2*sample_size/block_size)) # Generate double the treatments needed (for patients sent home/FA) (may need more for very fast recruitment rate)
         blocks = vcat(blocks, shuffle!(block_options))
     end
 
