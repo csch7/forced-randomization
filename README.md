@@ -9,4 +9,8 @@ Julia code for simulating four different randomization schemes in multicenter 2-
 - plotting.jl contains a few functions used to plot and export the results.
 - main.jl is the main body for the code. Notably, it contains the constant simulation parameters which can be altered to test different sample sizes, numbers of centers, and recruitment rates. Additionally, it is where all the data is gathered, stored, and exported.
 
-Running include("main.jl") in a Julia REPL will output results described in section "An Example"
+## Compilation:
+
+The Manifest and Project files are already included in this repo. In order to compile the necessary packages, run "using Pkg; Pkg.instantiate()" in a Julia REPL. 
+
+Afterwards, running include("main.jl") in a Julia REPL will output results described in section "An Example"
