@@ -1,198 +1,179 @@
+include("constants.jl")
 
-# Perform simulation with forced randomization disabled
-function F0a(
-    supplies::Dict,
-    center::Int64, 
-    treatment_index::Int64, 
-    treatments_used::Vector{Int64}, 
-    blocks::Array{Int64}, 
-    need_supply::Set, 
-    delayed_patients::Array, 
-    patients_sent_home::Int64, 
-    num_patients::Int64, 
-    critical_pt::Int64, 
-    TREATMENT_ARMS::Int64
-    )
-
-    # When all supplies are available
-    if (length(findall(iszero, (supplies[center])))==0)
-        supplies[center][blocks[treatment_index]]-=1        # Take one supply out of the center
-        treatments_used[blocks[treatment_index]]+=1         # Update treatments used (needed for imbalance)
-
-        # If this supply has reached the critical point needed for resupply
-        if (supplies[center][blocks[treatment_index]]<=critical_pt)
-            push!(need_supply, center)                      # Add this center to the centers that need supply
-        end
-
-    # If supplies is equal to zero (not possible with this scenario)
-    elseif (count(iszero, supplies[center]) == TREATMENT_ARMS)
-        push!(delayed_patients, center)
-        num_patients+=1
-    # When a supply is missing 
-    else 
-        patients_sent_home+=1
-        num_patients+=1         # Take one more patient from patients list to accommadate for missing patient
-    end
-
-    return supplies, treatments_used, need_supply, patients_sent_home, num_patients # Return all modified parameters
+# Holds all mutable state for a single scenario run.
+# treatments_used records the full sequence of treatment arms assigned per stratum,
+# which allows computing imbalance at any point during the trial.
+mutable struct Simulation
+    treatments_used::Vector           # Vector{Vector{Int16}} — treatment arm sequence per stratum
+    treatments_skipped::Vector        # Vector{Int16} — block position offset per stratum (F1a/F1b)
+    need_supply::Set                  # Set{Int16} — centers that have hit their critical point
+    delayed_patients::Vector          # Vector{Vector{Int16}} — centers with queued patients per stratum
+    patients_sent_home::Vector        # Vector{Int16} — count of patients excluded per stratum
+    patients_force_allocated::Vector  # Vector{Int16} — count of forced allocations per stratum
+    forward_treated::Vector           # Vector{Vector{Int16}} — block positions already used (F1b)
+    num_patients::Int                 # Running total of patient slots to process
+    supplies::Dict                    # Dict{center_id => Vector{supply per arm}}
+    critical_point::Int               # Supply level that triggers a resupply order
+    cap::Int                          # Remaining forced-allocation budget
+    treatment_blocks::Matrix          # Matrix{Int} — [stratum × block_position] treatment assignment
 end
 
 
+# ── Allocation step: F0a ─────────────────────────────────────────────────────
+# No forced randomization. Patient is allocated only when ALL treatments are
+# available at the center; sent home if any supply is zero.
+function allocate_f0a!(S::Simulation, center::Int16, stratum::Int8, treatment_index::Int16)
+    center_supplies   = S.supplies[center]
+    patient_treatment = S.treatment_blocks[stratum, treatment_index]
 
-# Perform simulation with forced randomization enabled, but initial cap set to 0
-function F0b(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, 
-    delayed_patients::Array, patients_sent_home::Int64, num_patients::Int64, critical_pt::Int64, TREATMENT_ARMS::Int64)
+    if length(findall(iszero, center_supplies)) == 0
+        center_supplies[patient_treatment] -= 1
+        push!(S.treatments_used[stratum], patient_treatment)
 
-    
-    # When the associated supply is available
-    if (supplies[center][blocks[treatment_index]]!=0)       # Only difference between F0a and F0b
-        supplies[center][blocks[treatment_index]]-=1        # Take one supply out of the center
-        treatments_used[blocks[treatment_index]]+=1
-        
-        # If this supply has reached the critical point needed for resupply
-        if (supplies[center][blocks[treatment_index]]<=critical_pt)
-            push!(need_supply, center)
-        end
-    
-    # If supplies is equal to zero, delay this patient
-    elseif (count(iszero, supplies[center]) ==TREATMENT_ARMS)
-        push!(delayed_patients, center)
-        num_patients+=1
-    # When the supply is missing 
-    else 
-        patients_sent_home+=1
-        num_patients+=1         # Take one more patient from patients list to accommodate for missing patient
-    end
-
-    return supplies, treatments_used, need_supply, patients_sent_home, num_patients
-end
-
-
-
-# Perform simulation with forced randomization enabled, with no backfilling
-function F1a(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, delayed_patients::Array,
-    treatments_skipped::Int64, num_patients::Int64, critical_pt::Int64, patients_FA::Int64, cap::Int64, TREATMENT_ARMS::Int64)
-
-    # FR always enabled at first
-    fr_enabled = true
-
-    # If the supply is not missing, assign as normal
-    if (supplies[center][blocks[treatment_index+treatments_skipped]]!=0)
-        supplies[center][blocks[treatment_index+treatments_skipped]]-=1
-        treatments_used[blocks[treatment_index+treatments_skipped]]+=1
-
-        # If this supply has reached the critical point
-        if (supplies[center][blocks[treatment_index]]<=critical_pt)
-            push!(need_supply, center)
+        if center_supplies[patient_treatment] <= S.critical_point
+            push!(S.need_supply, center)
         end
 
-    # If all supplies are missing, add this patient to the delayed_patients array. Add another patient to accommodate (for now)
-    elseif (count(iszero, supplies[center])==TREATMENT_ARMS)
-        push!(delayed_patients, center)
-        num_patients+=1
-
-    # If neither of these are true, perform forced randomization
+    elseif count(iszero, center_supplies) == TREATMENT_ARMS
+        # All supplies exhausted — delay patient until next resupply
+        push!(S.delayed_patients[stratum], center)
+        S.num_patients += 1
     else
-        # Continue looping until an available treatment is hit.
-        # Once this happens, assign as normal
+        # Only the patient's assigned treatment is missing — send home
+        S.patients_sent_home[stratum] += 1
+        S.num_patients += 1
+    end
+end
+
+
+# ── Allocation step: F0b ─────────────────────────────────────────────────────
+# Forced randomization is enabled in principle but cap = 0, so it never
+# triggers. Patient is sent home only if their specific assigned treatment is
+# unavailable (other arms being zero does not block allocation).
+function allocate_f0b!(S::Simulation, center::Int16, stratum::Int8, treatment_index::Int16)
+    center_supplies   = S.supplies[center]
+    patient_treatment = S.treatment_blocks[stratum, treatment_index]
+
+    if center_supplies[patient_treatment] != 0
+        center_supplies[patient_treatment] -= 1
+        push!(S.treatments_used[stratum], patient_treatment)
+
+        if center_supplies[patient_treatment] <= S.critical_point
+            push!(S.need_supply, center)
+        end
+
+    elseif count(iszero, center_supplies) == TREATMENT_ARMS
+        push!(S.delayed_patients[stratum], center)
+        S.num_patients += 1
+    else
+        S.patients_sent_home[stratum] += 1
+        S.num_patients += 1
+    end
+end
+
+
+# ── Allocation step: F1a ─────────────────────────────────────────────────────
+# Forced randomization without backfilling. When the assigned treatment is
+# unavailable, advance forward in the block to the next available treatment.
+# The skipped position is permanently lost (no backfill).
+# Returns fr_enabled — false once the cap is exhausted.
+function allocate_f1a!(S::Simulation, center::Int16, stratum::Int8, treatment_index::Int16)::Bool
+    center_supplies   = S.supplies[center]
+    patient_treatment = S.treatment_blocks[stratum, treatment_index + S.treatments_skipped[stratum]]
+
+    if center_supplies[patient_treatment] != 0
+        center_supplies[patient_treatment] -= 1
+        push!(S.treatments_used[stratum], patient_treatment)
+
+        if center_supplies[patient_treatment] <= S.critical_point
+            push!(S.need_supply, center)
+        end
+
+    elseif count(iszero, center_supplies) == TREATMENT_ARMS
+        push!(S.delayed_patients[stratum], center)
+        S.num_patients += 1
+
+    else
+        # Advance through the block until an available treatment is found
         while true
+            S.treatments_skipped[stratum] += 1
+            patient_treatment = S.treatment_blocks[stratum, treatment_index + S.treatments_skipped[stratum]]
 
-            treatments_skipped+=1   # Increment treatments skipped 
+            if center_supplies[patient_treatment] != 0
+                center_supplies[patient_treatment] -= 1
+                push!(S.treatments_used[stratum], patient_treatment)
 
-            # Assign as normal once a non-missing supply is found
-            if (supplies[center][blocks[treatment_index+treatments_skipped]]!=0)
-                supplies[center][blocks[treatment_index+treatments_skipped]]-=1
-                treatments_used[blocks[treatment_index+treatments_skipped]]+=1
-
-                if (supplies[center][blocks[treatment_index+treatments_skipped]]<=critical_pt)
-                    push!(need_supply, center)
+                if center_supplies[patient_treatment] <= S.critical_point
+                    push!(S.need_supply, center)
                 end
-
                 break
             end
-
         end
-        
-        patients_FA+=1
 
-        cap-=1
-        # Once the cap hits 0, default to F0a
-        if (cap==0) 
-            fr_enabled = false 
-        end
+        S.patients_force_allocated[stratum] += 1
+        S.cap -= 1
     end
 
-    return supplies, treatments_used, need_supply, delayed_patients, treatments_skipped, patients_FA, num_patients, fr_enabled
+    return S.cap > 0
 end
 
 
-
-# Perform simulation with forced randomization enabled, with backfilling.
-function F1b(supplies::Dict, center::Int64, treatment_index::Int64, treatments_used::Vector{Int64}, blocks::Array{Int64}, need_supply::Set, delayed_patients::Array,
-    forward_treated::Vector{Int64}, treatments_skipped::Int64, num_patients::Int64, critical_pt::Int64, patients_FA::Int64, cap::Int64, TREATMENT_ARMS::Int64)
-
-    fr_enabled = true
-
-    # If the current index is in the list of already treated patients, skip it
-    while (count( x->x==treatment_index+treatments_skipped, forward_treated) != 0)
-        treatments_skipped+=1
+# ── Allocation step: F1b ─────────────────────────────────────────────────────
+# Forced randomization with backfilling. When the assigned treatment is
+# unavailable, skip forward in the block; the skipped position is recorded in
+# forward_treated so a later patient can backfill it.
+# Returns fr_enabled — false once the cap is exhausted.
+function allocate_f1b!(S::Simulation, center::Int16, stratum::Int8, treatment_index::Int16)::Bool
+    # Skip any positions that have already been forward-allocated
+    while count(x -> x == treatment_index + S.treatments_skipped[stratum], S.forward_treated[stratum]) != 0
+        S.treatments_skipped[stratum] += 1
     end
 
-    # Assign as normal
-    if (supplies[center][blocks[treatment_index+treatments_skipped]]!=0)
-        supplies[center][blocks[treatment_index+treatments_skipped]]-=1
-        treatments_used[blocks[treatment_index+treatments_skipped]]+=1
+    center_supplies   = S.supplies[center]
+    patient_treatment = S.treatment_blocks[stratum, treatment_index + S.treatments_skipped[stratum]]
 
-        if (supplies[center][blocks[treatment_index+treatments_skipped]]<=critical_pt)
-            push!(need_supply, center)
+    if center_supplies[patient_treatment] != 0
+        center_supplies[patient_treatment] -= 1
+        push!(S.treatments_used[stratum], patient_treatment)
+
+        if center_supplies[patient_treatment] <= S.critical_point
+            push!(S.need_supply, center)
         end
 
-    # If all treatments missing, delay the patient
-    elseif (count(iszero, supplies[center]) == TREATMENT_ARMS)
-        push!(delayed_patients, center)
-        num_patients+=1
+    elseif count(iszero, center_supplies) == TREATMENT_ARMS
+        push!(S.delayed_patients[stratum], center)
+        S.num_patients += 1
 
-    # Otherwise, perform FR with backfilling
     else
-        # Here, treatments_skipped defines the "offset" due to patients FA'd, it's the difference between the patient index and the treatment index
-        treatments_skipped-=1 
+        # Back up one position (current slot will be backfilled later) and search forward
+        S.treatments_skipped[stratum] -= 1
+        j = 1
 
-        j=1
         while true
-
-            # If the current index has already been treated, skip it
-            while (count( x->x==treatment_index+treatments_skipped+j, forward_treated) != 0)
-                j+=1
+            # Skip positions already forward-allocated
+            while count(x -> x == treatment_index + S.treatments_skipped[stratum] + j, S.forward_treated[stratum]) != 0
+                j += 1
             end
 
-            # Assign as normal if the treatment is available
-            if (supplies[center][blocks[treatment_index+treatments_skipped+j]]!=0)
-                supplies[center][blocks[treatment_index+treatments_skipped+j]]-=1
-                treatments_used[blocks[treatment_index+treatments_skipped+j]]+=1
+            forward_pos      = treatment_index + S.treatments_skipped[stratum] + j
+            forward_treatment = S.treatment_blocks[stratum, forward_pos]
 
-                # Add this patient to the forward_treated array
-                push!(forward_treated,treatment_index+treatments_skipped+j)
+            if center_supplies[forward_treatment] != 0
+                center_supplies[forward_treatment] -= 1
+                push!(S.treatments_used[stratum], forward_treatment)
+                push!(S.forward_treated[stratum], forward_pos)
 
-                if (supplies[center][blocks[treatment_index+treatments_skipped+j]]<=critical_pt)
-                    push!(need_supply, center)
+                if center_supplies[forward_treatment] <= S.critical_point
+                    push!(S.need_supply, center)
                 end
-
-                # Break out of loop once available treatment is found
                 break
             end
-
-            j+=1
-
+            j += 1
         end
 
-        patients_FA+=1
-
-        cap-=1
-        if (cap==0) 
-            fr_enabled = false 
-        end
+        S.patients_force_allocated[stratum] += 1
+        S.cap -= 1
     end
 
-
-    return supplies, treatments_used, need_supply, delayed_patients, forward_treated, treatments_skipped, patients_FA, num_patients, fr_enabled
+    return S.cap > 0
 end
