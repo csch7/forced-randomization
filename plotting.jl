@@ -73,31 +73,30 @@ end
 # Grid of histograms of treatment imbalance at several patient indices m.
 # dmz1s/dmz2s: (1, simulations, patients) arrays for each stratum.
 # Shows 2 rows (one per stratum) x num_panels columns (patient positions near end of trial).
-function plot_imbalance_histograms(dmz1s, dmz2s, min_m1, min_m2, filepath, title; num_panels=4)
+function plot_imbalance_histograms(dmz1s, dmz2s, min_m1, min_m2, filepath, title; num_panels=4, unnormalize=false)
     plts = []
     for j in (4 - num_panels + 1):4
-        push!(plts, imbalance_histogram(
-            dmz1s[1, :, j + min_m1],
-            title * " (m=" * string(j + min_m1) * ", z=1)"
-        ))
+        m = j + min_m1
+        vals = unnormalize ? dmz1s[1, :, m] .* sqrt(m) : dmz1s[1, :, m]
+        push!(plts, imbalance_histogram(vals, title * " (m=" * string(m) * ", z=1)"))
     end
     for j in (4 - num_panels + 1):4
-        push!(plts, imbalance_histogram(
-            dmz2s[1, :, j + min_m2],
-            title * " (m=" * string(j + min_m2) * ", z=2)"
-        ))
+        m = j + min_m2
+        vals = unnormalize ? dmz2s[1, :, m] .* sqrt(m) : dmz2s[1, :, m]
+        push!(plts, imbalance_histogram(vals, title * " (m=" * string(m) * ", z=2)"))
     end
     t_plot = plot(plts..., layout=(2, num_panels), margin = 8mm, left_margin = 12mm, size=(500 * num_panels, 1300))
     savefig(t_plot, filepath)
 end
 
 function imbalance_histogram(dmzs::Array, title)
-    lo = floor(Int, minimum(dmzs))
-    hi = ceil(Int, maximum(dmzs))
+    vals = filter(!isnan, dmzs)
+    lo = floor(Int, minimum(vals))
+    hi = ceil(Int, maximum(vals))
     bins = (lo - 0.5):1:(hi + 0.5)
-    p = histogram(dmzs, legend=false, bins=bins)
-    ylabel!("Count")
-    xlabel!("dm(z)")
+    p = histogram(vals, legend=false, bins=bins, normalize=:probability)
+    ylabel!("Frequency")
+    xlabel!("Dm(z)")
     title!(title)
     return p
 end

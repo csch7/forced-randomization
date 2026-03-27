@@ -31,11 +31,11 @@ function run_simulation(params::SimParams)
         # characteristics[scenario_offset, characteristic, stratum_or_total, simulation]
         characteristics   = zeros(Float64, 2, 1, 3, params.number_simulations)
 
-        dm1s              = zeros(Float64, 2, params.number_simulations, max_z1)
-        dm2s              = zeros(Float64, 2, params.number_simulations, max_z2)
+        dm1s              = fill(NaN, 2, params.number_simulations, max_z1)
+        dm2s              = fill(NaN, 2, params.number_simulations, max_z2)
 
-        dlgz1s            = zeros(Float64, 2, params.number_simulations, max_z1)
-        dlgz2s            = zeros(Float64, 2, params.number_simulations, max_z2)
+        dlgz1s            = fill(NaN, 2, params.number_simulations, max_z1)
+        dlgz2s            = fill(NaN, 2, params.number_simulations, max_z2)
 
         d500z1s           = zeros(Float64, 2, params.number_simulations)
         d500z2s           = zeros(Float64, 2, params.number_simulations)
@@ -225,7 +225,7 @@ function run_simulation(params::SimParams)
                 # Record recruitment time as arrival time of last original patient
                 recruitment_times[si, sim] = patients[params.sample_size, 2]
 
-                normalise = false
+                normalise = (scenario == 7)
 
                 for c in 1:min(max_z1, length(S.treatments_used[1]))
                     cm1 = countmap(S.treatments_used[1][1:c])
@@ -287,8 +287,28 @@ results = run_simulation(params)
 
 r = results[1]  # first (only) beta
 
+f1a_panels = [
+    imbalance_line_panel(r.dm1s[1:1, :, :],   "Var[dm(1)]",    var;        cutoff=r.max_z1, start=4),
+    imbalance_line_panel(r.dm2s[1:1, :, :],   "Var[dm(2)]",    var;        cutoff=r.max_z2, start=4),
+    imbalance_line_panel(r.dm1s[1:1, :, :],   "Q90[dm(1)]",    quantile_90; cutoff=r.max_z1, start=4),
+    imbalance_line_panel(r.dm2s[1:1, :, :],   "Q90[dm(2)]",    quantile_90; cutoff=r.max_z2, start=4),
+]
+save_line_summary(f1a_panels, 2, 2, joinpath("plots", "f1a_low.png"), "F1a Low Supply")
+
+f1b_panels = [
+    imbalance_line_panel(r.dm1s[2:2, :, :],   "Var[Dm(1)]",    var;        cutoff=r.max_z1, start=4),
+    imbalance_line_panel(r.dm2s[2:2, :, :],   "Var[Dm(2)]",    var;        cutoff=r.max_z2, start=4),
+    imbalance_line_panel(r.dm1s[2:2, :, :],   "Q90[Dm(1)]",    quantile_90; cutoff=r.max_z1, start=4),
+    imbalance_line_panel(r.dm2s[2:2, :, :],   "Q90[Dm(2)]",    quantile_90; cutoff=r.max_z2, start=4),
+    imbalance_line_panel(r.dlgz1s[2:2, :, :], "Q90[DLG(z=1)]", quantile_90; cutoff=r.max_z1),
+    imbalance_line_panel(r.dlgz2s[2:2, :, :], "Q90[DLG(z=2)]", quantile_90; cutoff=r.max_z2),
+    imbalance_line_panel(r.dlgz1s[2:2, :, :], "max[DLG(z=1)]", maximum;    cutoff=r.max_z1),
+    imbalance_line_panel(r.dlgz2s[2:2, :, :], "max[DLG(z=2)]", maximum;    cutoff=r.max_z2),
+]
+save_line_summary(f1b_panels, 4, 2, joinpath("plots", "f1b_low.png"), "F1b Low Supply")
+
 plot_imbalance_histograms(r.dm1s[1:1, :, :], r.dm2s[1:1, :, :], r.max_z1 - 4, r.max_z2 - 4,
-    joinpath("plots", "dm_hists_f1a.png"), "F1a Low"; num_panels=1)
+    joinpath("plots", "dm_hists_f1a.png"), "F1a Low"; num_panels=1, unnormalize=true)
 plot_imbalance_histograms(r.dm1s[2:2, :, :], r.dm2s[2:2, :, :], r.max_z1 - 4, r.max_z2 - 4,
     joinpath("plots", "dm_hists_f1b.png"), "F1b Low")
 
