@@ -118,6 +118,21 @@ function allocate_f1a!(S::Simulation, center::Int16, stratum::Int8, treatment_in
 end
 
 
+# ── DLG helper ───────────────────────────────────────────────────────────────
+# Distance to Last Gap: furthest forward-allocated position minus the first
+# unfilled gap position in stratum z's treatment block.
+# Uses the same while-loop logic as allocate_f1b! to locate the first gap.
+function compute_dlg(S::Simulation, stratum::Int8, stratum_index::Int16)::Int16
+    isempty(S.forward_treated[stratum]) && return Int16(0)
+    ts   = S.treatments_skipped[stratum]
+    next = stratum_index + Int16(1)
+    while any(x -> x == next + ts, S.forward_treated[stratum])
+        ts += 1
+    end
+    Int16(max(0, maximum(S.forward_treated[stratum]) - (next + ts)))
+end
+
+
 # ── Allocation step: F1b ─────────────────────────────────────────────────────
 # Forced randomization with backfilling. When the assigned treatment is
 # unavailable, skip forward in the block; the skipped position is recorded in

@@ -165,10 +165,11 @@ function run_simulation(params::SimParams)
 
                             patients_per_stratum[stratum] += 1
 
-                            i_1 = trunc(Int16, (i - patients_per_stratum[2]) - tot_delayed[1] - length(S.delayed_patients[1]))
-                            i_2 = trunc(Int16, (i - patients_per_stratum[1]) - tot_delayed[2] - length(S.delayed_patients[2]))
-                            dlgz1s[si, sim, min(max_z1, stratum_index)] = patients_per_stratum[1] - i_1
-                            dlgz2s[si, sim, min(max_z2, stratum_index)] = patients_per_stratum[2] - i_2
+                            if stratum == 1
+                                dlgz1s[si, sim, min(max_z1, stratum_index)] = compute_dlg(S, stratum, stratum_index)
+                            else
+                                dlgz2s[si, sim, min(max_z2, stratum_index)] = compute_dlg(S, stratum, stratum_index)
+                            end
 
                             i += 1
                             if i > S.num_patients
@@ -214,10 +215,11 @@ function run_simulation(params::SimParams)
 
                     patients_per_stratum[stratum] += 1
 
-                    i_1 = trunc(Int16, i - patients_per_stratum[2])
-                    i_2 = trunc(Int16, i - patients_per_stratum[1])
-                    dlgz1s[si, sim, min(max_z1, stratum_index)] = patients_per_stratum[1] - i_1
-                    dlgz2s[si, sim, min(max_z2, stratum_index)] = patients_per_stratum[2] - i_2
+                    if stratum == 1
+                        dlgz1s[si, sim, min(max_z1, stratum_index)] = compute_dlg(S, stratum, stratum_index)
+                    else
+                        dlgz2s[si, sim, min(max_z2, stratum_index)] = compute_dlg(S, stratum, stratum_index)
+                    end
 
                     i += 1
                 end  # patient loop
