@@ -2,7 +2,7 @@ using Random
 using Statistics
 using StatsBase
 
-include("constants.jl")
+include("params.jl")
 
 # Generate inter-arrival times for each center using an exponential process,
 # then return all patients sorted by arrival time.
@@ -55,17 +55,17 @@ end
 #   Columns (supply):    Low, Medium, High
 #
 # Returns: (resupply_amount, init_supply, critical_point, fr_allowed, backfill_enabled, cap)
-function scenario_params(scenario::Int, cap::Int)
+function scenario_params(scenario::Int, params::SimParams)
     supply_configs = [
-        (LOW_RESUPPLY,  copy(LOW_INIT),  LOW_CRITICAL),
-        (MED_RESUPPLY,  copy(MED_INIT),  MED_CRITICAL),
-        (HIGH_RESUPPLY, copy(HIGH_INIT), HIGH_CRITICAL),
+        (params.low_resupply,  copy(params.low_init),  params.low_critical),
+        (params.med_resupply,  copy(params.med_init),  params.med_critical),
+        (params.high_resupply, copy(params.high_init), params.high_critical),
     ]
     fr_configs = [
-        (false, false, 0),    # F0a: no forced randomization; send home if supply missing
-        (true,  false, 0),    # F0b: FR enabled but cap = 0 (never triggers)
-        (true,  false, cap),  # F1a: FR enabled, skip forward without backfilling
-        (true,  true,  cap),  # F1b: FR enabled, skip forward with backfilling
+        (false, false, 0),                  # F0a
+        (true,  false, 0),                  # F0b
+        (true,  false, params.initial_cap), # F1a
+        (true,  true,  params.initial_cap), # F1b
     ]
     supply_idx = ((scenario - 1) % 3) + 1
     fr_idx     = ((scenario - 1) ÷ 3) + 1

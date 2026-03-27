@@ -162,54 +162,54 @@ function export_scenario_statistics(chars::Array, labels::Vector{String}, filepa
     CSV.write(filepath, df)
 end
 
-# Chi-squared Q-Q plot of squared Mahalanobis distances for joint bivariate normality.
+# Normal Q-Q plot of end-of-trial imbalances for each stratum.
 # d500z1s/d500z2s: end-of-trial imbalance vectors (one value per simulation) for strata 1 and 2.
-# Under bivariate normality, D² = (x - μ)ᵀ Σ⁻¹ (x - μ) ~ χ²(2).
-# Empirical quantiles are plotted against χ²(2) theoretical quantiles; points on the
-# 45-degree reference line indicate the distribution matches χ²(2).
+# Empirical quantiles are plotted against N(0,1) theoretical quantiles; the reference line
+# is y = μ + σ·x (the line data would follow under perfect normality).
 function plot_joint_normality_mahalanobis(
     d500z1s::AbstractVector,
     d500z2s::AbstractVector,
     filepath::String,
     title::String,
 )
-    n = length(d500z1s)
-    X = hcat(Float64.(d500z1s), Float64.(d500z2s))  # n × 2
+    norm = Normal()
 
-    μ     = vec(mean(X, dims=1))
-    Σ     = cov(X)
-    Σ_inv = inv(Σ)
+    function qq_series(v::AbstractVector)
+        y = sort(Float64.(v))
+        n = length(y)
+        x = quantile.(norm, [(i - 0.5) / n for i in 1:n])
+        μ, σ = mean(y), std(y)
+        x, y, μ, σ
+    end
 
-    D2 = sort(map(1:n) do i
-        x = X[i, :] .- μ
-        dot(x, Σ_inv * x)
-    end)
+    x1, y1, μ1, σ1 = qq_series(d500z1s)
+    x2, y2, μ2, σ2 = qq_series(d500z2s)
 
-    chi2 = Chisq(2)
-    probs = [(i - 0.5) / n for i in 1:n]
-    theoretical = quantile.(chi2, probs)
+    function make_panel(x, y, μ, σ, color, stratum_label)
+        ref_xs = [minimum(x), maximum(x)]
+        p = scatter(x, y;
+            label      = false,
+            markersize = 3,
+            alpha      = 0.6,
+            color      = color,
+            xlabel     = "Theoretical N(0,1) quantiles",
+            ylabel     = "Empirical end-of-trial imbalance",
+            title      = "$title — $stratum_label",
+            margin     = 10mm,
+            legend     = false,
+            titlefont  = font(11),
+        )
+        plot!(p, ref_xs, μ .+ σ .* ref_xs;
+            linewidth = 2,
+            color     = color,
+            linestyle = :dash,
+        )
+        p
+    end
 
-    ref_max = max(maximum(theoretical), maximum(D2))
+    p1 = make_panel(x1, y1, μ1, σ1, cgrad(:blues)[0.65], "Stratum 1")
+    p2 = make_panel(x2, y2, μ2, σ2, cgrad(:reds)[0.65],  "Stratum 2")
 
-    p = scatter(theoretical, D2;
-        label      = "D² quantiles",
-        markersize = 3,
-        alpha      = 0.6,
-        color      = cgrad(:blues)[0.65],
-        xlabel     = "Theoretical χ²(2) quantiles",
-        ylabel     = "Empirical D² quantiles",
-        title      = title,
-        size       = (800, 600),
-        margin     = 10mm,
-        legend     = :topleft,
-        titlefont  = font(13),
-    )
-    plot!(p, [0, ref_max], [0, ref_max];
-        label     = "Reference line (y = x)",
-        linewidth = 2,
-        color     = :red,
-        linestyle = :dash,
-    )
-
-    savefig(p, filepath)
+    fig = plot(p1, p2; layout = (1, 2), size = (1200, 550))
+    savefig(fig, filepath)
 end

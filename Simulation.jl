@@ -1,4 +1,4 @@
-include("constants.jl")
+include("params.jl")
 
 # Holds all mutable state for a single scenario run.
 # treatments_used records the full sequence of treatment arms assigned per stratum,
