@@ -72,22 +72,22 @@ end
 
 # Grid of histograms of treatment imbalance at several patient indices m.
 # dmz1s/dmz2s: (1, simulations, patients) arrays for each stratum.
-# Shows 2 rows (one per stratum) x 4 columns (patient positions near end of trial).
-function plot_imbalance_histograms(dmz1s, dmz2s, min_m1, min_m2, filepath, title)
+# Shows 2 rows (one per stratum) x num_panels columns (patient positions near end of trial).
+function plot_imbalance_histograms(dmz1s, dmz2s, min_m1, min_m2, filepath, title; num_panels=4)
     plts = []
-    for j in 1:4
+    for j in (4 - num_panels + 1):4
         push!(plts, imbalance_histogram(
             dmz1s[1, :, j + min_m1],
             title * " (m=" * string(j + min_m1) * ", z=1)"
         ))
     end
-    for j in 1:4
+    for j in (4 - num_panels + 1):4
         push!(plts, imbalance_histogram(
             dmz2s[1, :, j + min_m2],
             title * " (m=" * string(j + min_m2) * ", z=2)"
         ))
     end
-    t_plot = plot(plts..., layout=(2, 4), margin = 8mm, left_margin = 12mm, size=(2000, 1300))
+    t_plot = plot(plts..., layout=(2, num_panels), margin = 8mm, left_margin = 12mm, size=(500 * num_panels, 1300))
     savefig(t_plot, filepath)
 end
 
@@ -165,7 +165,8 @@ end
 # Chi-squared Q-Q plot of squared Mahalanobis distances for joint bivariate normality.
 # d500z1s/d500z2s: end-of-trial imbalance vectors (one value per simulation) for strata 1 and 2.
 # Under bivariate normality, D² = (x - μ)ᵀ Σ⁻¹ (x - μ) ~ χ²(2).
-# The histogram is density-normalised and overlaid with the χ²(2) PDF.
+# Empirical quantiles are plotted against χ²(2) theoretical quantiles; points on the
+# 45-degree reference line indicate the distribution matches χ²(2).
 function plot_joint_normality_mahalanobis(
     d500z1s::AbstractVector,
     d500z2s::AbstractVector,
@@ -179,33 +180,35 @@ function plot_joint_normality_mahalanobis(
     Σ     = cov(X)
     Σ_inv = inv(Σ)
 
-    D2 = map(1:n) do i
+    D2 = sort(map(1:n) do i
         x = X[i, :] .- μ
         dot(x, Σ_inv * x)
-    end
+    end)
 
-    chi2  = Chisq(2)
-    x_max = max(quantile(chi2, 0.999), maximum(D2) * 1.02)
-    xs    = range(0, x_max, length=400)
+    chi2 = Chisq(2)
+    probs = [(i - 0.5) / n for i in 1:n]
+    theoretical = quantile.(chi2, probs)
 
-    p = histogram(D2;
-        normalize  = :pdf,
-        bins       = 40,
-        label      = "Empirical D²",
-        alpha      = 0.55,
+    ref_max = max(maximum(theoretical), maximum(D2))
+
+    p = scatter(theoretical, D2;
+        label      = "D² quantiles",
+        markersize = 3,
+        alpha      = 0.6,
         color      = cgrad(:blues)[0.65],
-        xlabel     = "Mahalanobis Distance² (D²)",
-        ylabel     = "Density",
+        xlabel     = "Theoretical χ²(2) quantiles",
+        ylabel     = "Empirical D² quantiles",
         title      = title,
         size       = (800, 600),
         margin     = 10mm,
-        legend     = :topright,
+        legend     = :topleft,
         titlefont  = font(13),
     )
-    plot!(p, xs, pdf.(chi2, xs);
-        label     = "χ²(2) density",
-        linewidth = 2.5,
+    plot!(p, [0, ref_max], [0, ref_max];
+        label     = "Reference line (y = x)",
+        linewidth = 2,
         color     = :red,
+        linestyle = :dash,
     )
 
     savefig(p, filepath)

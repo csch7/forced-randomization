@@ -293,7 +293,7 @@ for (bi, BETA) in enumerate(BETA_OPTIONS)
     # ]
     # save_line_summary(f1b_panels, 4, 2, joinpath("plots", "f1b_low.png"), "F1b Low Supply")
 
-    plot_imbalance_histograms(dm1s[1:1, :, :], dm2s[1:1, :, :], 528, 328, joinpath("plots", "dm_hists_f1a.png"), "F1a Low")
+    plot_imbalance_histograms(dm1s[1:1, :, :], dm2s[1:1, :, :], 528, 328, joinpath("plots", "dm_hists_f1a.png"), "F1a Low"; num_panels=1)
     plot_imbalance_histograms(dm1s[2:2, :, :], dm2s[2:2, :, :], 528, 328, joinpath("plots", "dm_hists_f1b.png"), "F1b Low")
 
     plot_joint_normality_mahalanobis(
