@@ -1,5 +1,5 @@
 # ── Trial Design ────────────────────────────────────────────────────────────
-const SAMPLE_SIZE                   = 1000
+const SAMPLE_SIZE                   = 10000
 const TREATMENT_ARMS                = 2
 const ALLOCATION_RATIO              = (1, 1)
 const BLOCK_SIZE                    = 4

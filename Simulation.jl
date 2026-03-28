@@ -26,7 +26,7 @@ function allocate_f0a!(S::Simulation, center::Int16, stratum::Int8, treatment_in
     center_supplies   = S.supplies[center]
     patient_treatment = S.treatment_blocks[stratum, treatment_index]
 
-    if length(findall(iszero, center_supplies)) == 0
+    if !any(iszero, center_supplies)
         center_supplies[patient_treatment] -= 1
         push!(S.treatments_used[stratum], patient_treatment)
 
@@ -126,7 +126,7 @@ function compute_dlg(S::Simulation, stratum::Int8, stratum_index::Int16)::Int16
     isempty(S.forward_treated[stratum]) && return Int16(0)
     ts   = S.treatments_skipped[stratum]
     next = stratum_index + Int16(1)
-    while any(x -> x == next + ts, S.forward_treated[stratum])
+    while (next + ts) in S.forward_treated[stratum]
         ts += 1
     end
     Int16(max(0, maximum(S.forward_treated[stratum]) - (next + ts)))
@@ -140,7 +140,7 @@ end
 # Returns fr_enabled — false once the cap is exhausted.
 function allocate_f1b!(S::Simulation, center::Int16, stratum::Int8, treatment_index::Int16)::Bool
     # Skip any positions that have already been forward-allocated
-    while count(x -> x == treatment_index + S.treatments_skipped[stratum], S.forward_treated[stratum]) != 0
+    while (treatment_index + S.treatments_skipped[stratum]) in S.forward_treated[stratum]
         S.treatments_skipped[stratum] += 1
     end
 
@@ -166,7 +166,7 @@ function allocate_f1b!(S::Simulation, center::Int16, stratum::Int8, treatment_in
 
         while true
             # Skip positions already forward-allocated
-            while count(x -> x == treatment_index + S.treatments_skipped[stratum] + j, S.forward_treated[stratum]) != 0
+            while (treatment_index + S.treatments_skipped[stratum] + j) in S.forward_treated[stratum]
                 j += 1
             end
 

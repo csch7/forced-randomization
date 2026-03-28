@@ -4,8 +4,8 @@ using Random
 using Printf
 using Statistics
 using StatsBase
-using ProgressBars
 using LinearAlgebra
+using ProgressMeter
 include("funcs.jl")
 include("plotting.jl")
 include("Simulation.jl")
@@ -46,7 +46,8 @@ function run_simulation(params::SimParams)
         # recruitment_times[scenario_offset, simulation] — arrival time of last patient
         recruitment_times = zeros(Float64, 2, params.number_simulations)
 
-        for sim in tqdm(1:params.number_simulations)
+        p = Progress(params.number_simulations)
+        Threads.@threads for sim in 1:params.number_simulations
 
             center_rates = rand(Gamma(params.alpha, 1/BETA), params.centers)
             center_acts  = rand(0:4, params.centers)
@@ -77,7 +78,7 @@ function run_simulation(params::SimParams)
                     [Int16[] for _ in 1:2],
                     zeros(Int16, 2),
                     zeros(Int16, 2),
-                    [Int16[] for _ in 1:2],
+                    [Set{Int16}() for _ in 1:2],
                     params.sample_size,
                     center_supplies,
                     critical_pt,
@@ -229,34 +230,32 @@ function run_simulation(params::SimParams)
 
                 normalise = (scenario == 7)
 
-                for c in 1:min(max_z1, length(S.treatments_used[1]))
-                    cm1 = countmap(S.treatments_used[1][1:c])
-                    t1  = get(cm1, 1, 0)
-                    t2  = get(cm1, 2, 0)
-                    dm1s[si, sim, c] = normalise ? (t1 - t2) / sqrt(c) : (t1 - t2)
-                end
-                for c in 1:min(max_z2, length(S.treatments_used[2]))
-                    cm2 = countmap(S.treatments_used[2][1:c])
-                    t1  = get(cm2, 1, 0)
-                    t2  = get(cm2, 2, 0)
-                    dm2s[si, sim, c] = normalise ? (t1 - t2) / sqrt(c) : (t1 - t2)
-                end
-
-                cm1_full = countmap(S.treatments_used[1])
+                t1_z1 = 0; t2_z1 = 0
                 n1 = length(S.treatments_used[1])
-                d1 = get(cm1_full, 1, 0) - get(cm1_full, 2, 0)
-                d500z1s[si, sim] = normalise ? d1 / sqrt(n1) : d1
+                for c in 1:n1
+                    if S.treatments_used[1][c] == 1; t1_z1 += 1 else t2_z1 += 1 end
+                    if c <= max_z1
+                        dm1s[si, sim, c] = normalise ? (t1_z1 - t2_z1) / sqrt(c) : Float64(t1_z1 - t2_z1)
+                    end
+                end
+                d500z1s[si, sim] = normalise ? Float64(t1_z1 - t2_z1) / sqrt(n1) : Float64(t1_z1 - t2_z1)
 
-                cm2_full = countmap(S.treatments_used[2])
+                t1_z2 = 0; t2_z2 = 0
                 n2 = length(S.treatments_used[2])
-                d2 = get(cm2_full, 1, 0) - get(cm2_full, 2, 0)
-                d500z2s[si, sim] = normalise ? d2 / sqrt(n2) : d2
+                for c in 1:n2
+                    if S.treatments_used[2][c] == 1; t1_z2 += 1 else t2_z2 += 1 end
+                    if c <= max_z2
+                        dm2s[si, sim, c] = normalise ? (t1_z2 - t2_z2) / sqrt(c) : Float64(t1_z2 - t2_z2)
+                    end
+                end
+                d500z2s[si, sim] = normalise ? Float64(t1_z2 - t2_z2) / sqrt(n2) : Float64(t1_z2 - t2_z2)
 
                 characteristics[si, 1, 1, sim] = S.patients_force_allocated[1] / length(S.treatments_used[1])
                 characteristics[si, 1, 2, sim] = S.patients_force_allocated[2] / length(S.treatments_used[2])
                 characteristics[si, 1, 3, sim] = sum(S.patients_force_allocated) / params.sample_size
 
             end  # scenario
+            next!(p)
         end  # sim
 
         push!(all_results, (
