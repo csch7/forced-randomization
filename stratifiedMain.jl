@@ -235,7 +235,7 @@ function run_simulation(params::SimParams)
                 for c in 1:n1
                     if S.treatments_used[1][c] == 1; t1_z1 += 1 else t2_z1 += 1 end
                     if c <= max_z1
-                        dm1s[si, sim, c] = normalise ? abs(t1_z1 - t2_z1) / sqrt(c) : abs(Float64(t1_z1 - t2_z1))
+                        dm1s[si, sim, c] = normalise ? (t1_z1 - t2_z1) / sqrt(c) : Float64(t1_z1 - t2_z1)
                     end
                 end
                 d500z1s[si, sim] = normalise ? Float64(t1_z1 - t2_z1) / sqrt(n1) : Float64(t1_z1 - t2_z1)
@@ -245,7 +245,7 @@ function run_simulation(params::SimParams)
                 for c in 1:n2
                     if S.treatments_used[2][c] == 1; t1_z2 += 1 else t2_z2 += 1 end
                     if c <= max_z2
-                        dm2s[si, sim, c] = normalise ? abs(t1_z2 - t2_z2) / sqrt(c) : abs(Float64(t1_z2 - t2_z2))
+                        dm2s[si, sim, c] = normalise ? (t1_z2 - t2_z2) / sqrt(c) : Float64(t1_z2 - t2_z2)
                     end
                 end
                 d500z2s[si, sim] = normalise ? Float64(t1_z2 - t2_z2) / sqrt(n2) : Float64(t1_z2 - t2_z2)
@@ -289,8 +289,8 @@ results = run_simulation(params)
 r = results[1]  # first (only) beta
 
 f1a_panels = [
-    imbalance_line_panel(r.dm1s[1:1, :, :],   "Var[dm(1)]",    var;        cutoff=r.max_z1, start=4),
-    imbalance_line_panel(r.dm2s[1:1, :, :],   "Var[dm(2)]",    var;        cutoff=r.max_z2, start=4),
+    imbalance_line_panel(abs.(r.dm1s[1:1, :, :]),   "Var[dm(1)]",    var;        cutoff=r.max_z1, start=4),
+    imbalance_line_panel(abs.(r.dm2s[1:1, :, :]),   "Var[dm(2)]",    var;        cutoff=r.max_z2, start=4),
     imbalance_line_panel(r.dm1s[1:1, :, :],   "Q90[dm(1)]",    quantile_90; cutoff=r.max_z1, start=4),
     imbalance_line_panel(r.dm2s[1:1, :, :],   "Q90[dm(2)]",    quantile_90; cutoff=r.max_z2, start=4),
 ]
