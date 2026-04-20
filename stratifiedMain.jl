@@ -289,8 +289,8 @@ results = run_simulation(params)
 r = results[1]  # first (only) beta
 
 f1a_panels = [
-    imbalance_line_panel(abs.(r.dm1s[1:1, :, :]),   "Var[dm(1)]",    var;        cutoff=r.max_z1, start=4),
-    imbalance_line_panel(abs.(r.dm2s[1:1, :, :]),   "Var[dm(2)]",    var;        cutoff=r.max_z2, start=4),
+    imbalance_line_panel(r.dm1s[1:1, :, :],   "Var[dm(1)]",    var;        cutoff=r.max_z1, start=4),
+    imbalance_line_panel(r.dm2s[1:1, :, :],   "Var[dm(2)]",    var;        cutoff=r.max_z2, start=4),
     imbalance_line_panel(r.dm1s[1:1, :, :],   "Q90[dm(1)]",    quantile_90; cutoff=r.max_z1, start=4),
     imbalance_line_panel(r.dm2s[1:1, :, :],   "Q90[dm(2)]",    quantile_90; cutoff=r.max_z2, start=4),
 ]

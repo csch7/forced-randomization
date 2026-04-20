@@ -1,5 +1,5 @@
 # ── Trial Design ────────────────────────────────────────────────────────────
-const SAMPLE_SIZE                   = 1000
+const SAMPLE_SIZE                   = 2000
 const TREATMENT_ARMS                = 2
 const ALLOCATION_RATIO              = (1, 1)
 const BLOCK_SIZE                    = 4
@@ -22,7 +22,7 @@ const BETA_OPTIONS                  = [16]
 const STRATA_ASSIGNMENT_PROBABILITY = 0.6   # Probability of stratum 1 assignment
 
 # ── Simulation ───────────────────────────────────────────────────────────────
-const NUMBER_SIMULATIONS            = 10000
+const NUMBER_SIMULATIONS            = 1000
 
 # ── Supply Strategy Parameters ───────────────────────────────────────────────
 # Low supply
