@@ -1,4 +1,6 @@
 using DataFrames
+using Dates
+using DelimitedFiles
 using Distributions
 using Random
 using Printf
@@ -11,6 +13,8 @@ include("plotting.jl")
 include("Simulation.jl")
 
 mkpath("plots")
+
+const SCENARIOS_TO_RUN = [7, 10]
 
 const HEADINGS = [
     "IRT Approach", "Resupply Strategy",
@@ -58,7 +62,7 @@ function run_simulation(params::SimParams)
 
             strata = generate_strata_assignments(params.sample_size * 2, params.strata_assignment_probability)
 
-            for (si, scenario) in enumerate([7, 10])
+            for (si, scenario) in enumerate(SCENARIOS_TO_RUN)
 
                 resupply_amt, init_supply, critical_pt, fr_allowed, backfill_enabled, cap =
                     scenario_params(scenario, params)
@@ -319,16 +323,59 @@ plot_joint_normality_mahalanobis(
     "F1a Low Supply — Joint Normality of End-of-Trial Imbalances",
 )
 
-for (label, idx) in [("F1a Low", 1), ("F1b Low", 2)]
-    A = cov(hcat(r.d500z1s[idx, :], r.d500z2s[idx, :]))
-    println("Var-Cov $label: ", A)
-    println("\tEigenvalues: ", eigvals(A))
+open(joinpath("plots", "params.txt"), "w") do file
+    println(file, "Last run: ", Dates.now(), " US Eastern")
+    println(file, "")
+    println(file, "--- Scenarios Run ---")
+    for s in SCENARIOS_TO_RUN
+        println(file, "  Scenario $s: ", SCENARIO_MAP[s])
+    end
+    println(file, "")
+    println(file, "--- Trial Design ---")
+    println(file, "  SAMPLE_SIZE                   = ", SAMPLE_SIZE)
+    println(file, "  TREATMENT_ARMS                = ", TREATMENT_ARMS)
+    println(file, "  ALLOCATION_RATIO              = ", ALLOCATION_RATIO)
+    println(file, "  BLOCK_SIZE                    = ", BLOCK_SIZE)
+    println(file, "  CENTERS                       = ", CENTERS)
+    println(file, "")
+    println(file, "--- Resupply Logistics ---")
+    println(file, "  RESUPPLY_PERIOD               = ", RESUPPLY_PERIOD, " days")
+    println(file, "  RESUPPLY_TIME                 = ", RESUPPLY_TIME, " days")
+    println(file, "  KIT_COST                      = ", KIT_COST)
+    println(file, "  SHIP_COST                     = ", SHIP_COST)
+    println(file, "")
+    println(file, "--- Forced Randomization ---")
+    println(file, "  INITIAL_CAP                   = ", INITIAL_CAP)
+    println(file, "")
+    println(file, "--- Recruitment Rate (Gamma(α, 1/β)) ---")
+    println(file, "  ALPHA                         = ", ALPHA)
+    println(file, "  BETA_OPTIONS                  = ", BETA_OPTIONS)
+    println(file, "")
+    println(file, "--- Stratification ---")
+    println(file, "  STRATA_ASSIGNMENT_PROBABILITY = ", STRATA_ASSIGNMENT_PROBABILITY)
+    println(file, "")
+    println(file, "--- Simulation ---")
+    println(file, "  NUMBER_SIMULATIONS            = ", NUMBER_SIMULATIONS)
+    println(file, "")
+    println(file, "--- Supply Strategy Parameters ---")
+    println(file, "  Low:  RESUPPLY=", LOW_RESUPPLY,  ", INIT=", LOW_INIT,  ", CRITICAL=", LOW_CRITICAL)
+    println(file, "  Med:  RESUPPLY=", MED_RESUPPLY,  ", INIT=", MED_INIT,  ", CRITICAL=", MED_CRITICAL)
+    println(file, "  High: RESUPPLY=", HIGH_RESUPPLY, ", INIT=", HIGH_INIT, ", CRITICAL=", HIGH_CRITICAL)
 end
 
-@printf("Average FA (F1a low, z=1): %.4f\n", mean(r.characteristics[1, 1, 1, :]))
-@printf("Average FA (F1a low, z=2): %.4f\n", mean(r.characteristics[1, 1, 2, :]))
-@printf("Average FA (F1a low, tot): %.4f\n", mean(r.characteristics[1, 1, 3, :]))
-@printf("Average FA (F1b low, z=1): %.4f\n", mean(r.characteristics[2, 1, 1, :]))
-@printf("Average FA (F1b low, z=2): %.4f\n", mean(r.characteristics[2, 1, 2, :]))
-@printf("Average FA (F1b low, tot): %.4f\n", mean(r.characteristics[2, 1, 3, :]))
+open(joinpath("plots", "output.txt"), "w") do file
+    print(file, @sprintf("Average FA (F1a low, z=1): %.4f\n", mean(r.characteristics[1, 1, 1, :])))
+    print(file, @sprintf("Average FA (F1a low, z=2): %.4f\n", mean(r.characteristics[1, 1, 2, :])))
+    print(file, @sprintf("Average FA (F1a low, tot): %.4f\n", mean(r.characteristics[1, 1, 3, :])))
+    print(file, @sprintf("Average FA (F1b low, z=1): %.4f\n", mean(r.characteristics[2, 1, 1, :])))
+    print(file, @sprintf("Average FA (F1b low, z=2): %.4f\n", mean(r.characteristics[2, 1, 2, :])))
+    print(file, @sprintf("Average FA (F1b low, tot): %.4f\n", mean(r.characteristics[2, 1, 3, :])))
+
+    for (label, idx) in [("F1a Low", 1), ("F1b Low", 2)]
+        A = cov(hcat(r.d500z1s[idx, :], r.d500z2s[idx, :]))
+        println(file, "Var-Cov $label: ", A)
+        println(file, "\tEigenvalues: ", eigvals(A))
+    end
+end
+
 end  # !isdefined PlutoRunner

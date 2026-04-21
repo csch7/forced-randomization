@@ -39,3 +39,18 @@ const MED_CRITICAL                  = 1
 const HIGH_RESUPPLY                 = 5
 const HIGH_INIT                     = [4, 4]
 const HIGH_CRITICAL                 = 2
+
+const SCENARIO_MAP = Dict{Int, String}(
+    1 => "F0a Low",
+    2 => "F0a Med",
+    3 => "F0a High",
+    4 => "F0b Low",
+    5 => "F0b Med",
+    6 => "F0b High",
+    7 => "F1a Low",
+    8 => "F1a Med",
+    9 => "F1a High",
+    10 => "F1b Low",
+    11 => "F1b Med",
+    12 => "F1b High"
+)

@@ -1,0 +1,36 @@
+Last run: 2026-04-20T20:47:47.946 US Eastern
+
+--- Scenarios Run ---
+  Scenario 7: F1a Low
+  Scenario 10: F1b Low
+
+--- Trial Design ---
+  SAMPLE_SIZE                   = 2000
+  TREATMENT_ARMS                = 2
+  ALLOCATION_RATIO              = (1, 1)
+  BLOCK_SIZE                    = 4
+  CENTERS                       = 80
+
+--- Resupply Logistics ---
+  RESUPPLY_PERIOD               = 7 days
+  RESUPPLY_TIME                 = 3 days
+  KIT_COST                      = 10000
+  SHIP_COST                     = 100
+
+--- Forced Randomization ---
+  INITIAL_CAP                   = 600
+
+--- Recruitment Rate (Gamma(α, 1/β)) ---
+  ALPHA                         = 1.2
+  BETA_OPTIONS                  = [16]
+
+--- Stratification ---
+  STRATA_ASSIGNMENT_PROBABILITY = 0.6
+
+--- Simulation ---
+  NUMBER_SIMULATIONS            = 1000
+
+--- Supply Strategy Parameters ---
+  Low:  RESUPPLY=2, INIT=[2, 2], CRITICAL=1
+  Med:  RESUPPLY=4, INIT=[3, 3], CRITICAL=1
+  High: RESUPPLY=5, INIT=[4, 4], CRITICAL=2
