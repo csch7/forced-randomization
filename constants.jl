@@ -1,8 +1,8 @@
 # ── Trial Design ────────────────────────────────────────────────────────────
-const SAMPLE_SIZE                   = 2000
+const SAMPLE_SIZE                   = 2004
 const TREATMENT_ARMS                = 2
 const ALLOCATION_RATIO              = (1, 1)
-const BLOCK_SIZE                    = 4
+const BLOCK_SIZE                    = 12
 const CENTERS                       = 80
 
 # ── Resupply Logistics ───────────────────────────────────────────────────────
@@ -12,23 +12,25 @@ const KIT_COST                      = 10_000
 const SHIP_COST                     = 100
 
 # ── Forced Randomization ─────────────────────────────────────────────────────
-const INITIAL_CAP                   = Int(0.3 * SAMPLE_SIZE)
+const INITIAL_CAP                   = Int(0.5 * SAMPLE_SIZE)
 
 # ── Center Recruitment Rate Distribution (Gamma(α, 1/β)) ────────────────────
 const ALPHA                         = 1.2
-const BETA_OPTIONS                  = [16]
+const BETA_OPTIONS                  = [16] 
 
 # ── Stratification ───────────────────────────────────────────────────────────
-const STRATA_ASSIGNMENT_PROBABILITY = 0.6   # Probability of stratum 1 assignment
+const NUM_STRATA                    = 2
+const STRATA_PROBABILITIES          = [0.6, 0.4]  # one weight per stratum, must sum to 1
 
 # ── Simulation ───────────────────────────────────────────────────────────────
 const NUMBER_SIMULATIONS            = 1000
+const RUN_LABEL                     = "17-%FA_2-Strata_12-PBS"   # set to e.g. "low_beta3" to save plots in plots/low_beta3/
 
 # ── Supply Strategy Parameters ───────────────────────────────────────────────
 # Low supply
-const LOW_RESUPPLY                  = 2
-const LOW_INIT                      = [2, 2]
-const LOW_CRITICAL                  = 1
+const LOW_RESUPPLY                  = 1
+const LOW_INIT                      = [1, 1]
+const LOW_CRITICAL                  = 0
 
 # Medium supply
 const MED_RESUPPLY                  = 4

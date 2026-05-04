@@ -22,10 +22,12 @@ Base.@kwdef struct SimParams
     beta_options::Vector{Float64}
 
     # Stratification
-    strata_assignment_probability::Float64
+    num_strata::Int
+    strata_probabilities::Vector{Float64}
 
     # Simulation
     number_simulations::Int
+    run_label::String
 
     # Supply strategies
     low_resupply::Int
@@ -53,8 +55,10 @@ function default_params()
         initial_cap                   = INITIAL_CAP,
         alpha                         = ALPHA,
         beta_options                  = Vector{Float64}(BETA_OPTIONS),
-        strata_assignment_probability = STRATA_ASSIGNMENT_PROBABILITY,
+        num_strata                    = NUM_STRATA,
+        strata_probabilities          = Vector{Float64}(STRATA_PROBABILITIES),
         number_simulations            = NUMBER_SIMULATIONS,
+        run_label                     = RUN_LABEL,
         low_resupply                  = LOW_RESUPPLY,
         low_init                      = copy(LOW_INIT),
         low_critical                  = LOW_CRITICAL,

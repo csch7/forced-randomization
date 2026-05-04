@@ -29,9 +29,11 @@ function generate_patient_arrivals(
     return all_arrivals[sortperm(all_arrivals[:, 2]), :]
 end
 
-# Assign each patient to a stratum: stratum 1 with probability p, stratum 2 otherwise.
-function generate_strata_assignments(num_patients::Int, p::Float64)
-    return [u ≤ p ? Int8(1) : Int8(2) for u in rand(num_patients)]
+# Assign each patient to a stratum by drawing from a categorical distribution
+# defined by probs (one weight per stratum, must sum to 1).
+function generate_strata_assignments(num_patients::Int, probs::Vector{Float64})
+    cumprobs = cumsum(probs)
+    return [Int8(findfirst(>=(u), cumprobs)) for u in rand(num_patients)]
 end
 
 # Generate a permuted block design treatment sequence.
@@ -41,10 +43,11 @@ function generate_treatment_blocks(
     ratio::Tuple,
     sample_size::Int,
     treat_arms::Int,
-    block_size::Int
+    block_size::Int,
+    num_strata::Int
 )
     block_template = [t for t in 1:treat_arms for _ in 1:(ratio[t] * block_size ÷ sum(ratio))]
-    n_blocks = ceil(Int, 2 * sample_size / block_size)
+    n_blocks = ceil(Int, num_strata * sample_size / block_size)
     return reduce(hcat, [reshape(shuffle(block_template), 1, :) for _ in 1:n_blocks])
 end
 

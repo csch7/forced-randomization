@@ -71,21 +71,20 @@ function save_line_summary(panels::Vector, nrows::Int, ncols::Int, filepath::Str
 end
 
 # Grid of histograms of treatment imbalance at several patient indices m.
-# dmz1s/dmz2s: (1, simulations, patients) arrays for each stratum.
-# Shows 2 rows (one per stratum) x num_panels columns (patient positions near end of trial).
-function plot_imbalance_histograms(dmz1s, dmz2s, min_m1, min_m2, filepath, title; num_panels=4, unnormalize=false)
+# dms: Vector of (1, simulations, patients) arrays, one per stratum.
+# min_ms: Vector of minimum patient indices, one per stratum.
+# Shows num_strata rows x num_panels columns.
+function plot_imbalance_histograms(dms::Vector, min_ms::Vector{Int}, filepath, title; num_panels=4, unnormalize=false)
+    ns   = length(dms)
     plts = []
-    for j in (4 - num_panels + 1):4
-        m = j + min_m1
-        vals = unnormalize ? dmz1s[1, :, m] .* sqrt(m) : dmz1s[1, :, m]
-        push!(plts, imbalance_histogram(vals, title * " (m=" * string(m) * ", z=1)"))
+    for k in 1:ns
+        for j in (4 - num_panels + 1):4
+            m    = j + min_ms[k]
+            vals = unnormalize ? dms[k][1, :, m] .* sqrt(m) : dms[k][1, :, m]
+            push!(plts, imbalance_histogram(vals, title * " (m=" * string(m) * ", z=" * string(k) * ")"))
+        end
     end
-    for j in (4 - num_panels + 1):4
-        m = j + min_m2
-        vals = unnormalize ? dmz2s[1, :, m] .* sqrt(m) : dmz2s[1, :, m]
-        push!(plts, imbalance_histogram(vals, title * " (m=" * string(m) * ", z=2)"))
-    end
-    t_plot = plot(plts..., layout=(2, num_panels), margin = 8mm, left_margin = 12mm, size=(500 * num_panels, 1300))
+    t_plot = plot(plts..., layout=(ns, num_panels), margin=8mm, left_margin=12mm, size=(500 * num_panels, 650 * ns))
     savefig(t_plot, filepath)
 end
 
@@ -166,12 +165,13 @@ end
 # Empirical quantiles are plotted against N(0,1) theoretical quantiles; the reference line
 # is y = μ + σ·x (the line data would follow under perfect normality).
 function plot_joint_normality_mahalanobis(
-    d500z1s::AbstractVector,
-    d500z2s::AbstractVector,
+    d500s::Vector{<:AbstractVector},
     filepath::String,
     title::String,
 )
-    norm = Normal()
+    norm       = Normal()
+    ns         = length(d500s)
+    color_keys = [:blues, :reds, :greens, :purples, :oranges]
 
     function qq_series(v::AbstractVector)
         y = sort(Float64.(v))
@@ -180,9 +180,6 @@ function plot_joint_normality_mahalanobis(
         μ, σ = mean(y), std(y)
         x, y, μ, σ
     end
-
-    x1, y1, μ1, σ1 = qq_series(d500z1s)
-    x2, y2, μ2, σ2 = qq_series(d500z2s)
 
     function make_panel(x, y, μ, σ, color, stratum_label)
         ref_xs = [minimum(x), maximum(x)]
@@ -198,17 +195,17 @@ function plot_joint_normality_mahalanobis(
             legend     = false,
             titlefont  = font(11),
         )
-        plot!(p, ref_xs, μ .+ σ .* ref_xs;
-            linewidth = 2,
-            color     = color,
-            linestyle = :dash,
-        )
+        plot!(p, ref_xs, μ .+ σ .* ref_xs; linewidth=2, color=color, linestyle=:dash)
         p
     end
 
-    p1 = make_panel(x1, y1, μ1, σ1, cgrad(:blues)[0.65], "Stratum 1")
-    p2 = make_panel(x2, y2, μ2, σ2, cgrad(:reds)[0.65],  "Stratum 2")
+    panels = [
+        let (x, y, μ, σ) = qq_series(d500s[k])
+            make_panel(x, y, μ, σ, cgrad(color_keys[mod1(k, length(color_keys))])[0.65], "Stratum $k")
+        end
+        for k in 1:ns
+    ]
 
-    fig = plot(p1, p2; layout = (1, 2), size = (1200, 550))
+    fig = plot(panels...; layout=(1, ns), size=(600 * ns, 550))
     savefig(fig, filepath)
 end

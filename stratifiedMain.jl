@@ -12,8 +12,6 @@ include("funcs.jl")
 include("plotting.jl")
 include("Simulation.jl")
 
-mkpath("plots")
-
 const SCENARIOS_TO_RUN = [7, 10]
 
 const HEADINGS = [
@@ -29,26 +27,30 @@ function run_simulation(params::SimParams)
 
     for BETA in params.beta_options
 
-        max_z1 = Int(params.strata_assignment_probability * params.sample_size)
-        max_z2 = params.sample_size - max_z1
+        ns  = params.num_strata
+        nsc = length(SCENARIOS_TO_RUN)
+
+        max_z      = [Int(round(params.strata_probabilities[k] * params.sample_size)) for k in 1:ns]
+        max_z[end] = params.sample_size - sum(max_z[1:end-1])
 
         # characteristics[scenario_offset, characteristic, stratum_or_total, simulation]
-        characteristics   = zeros(Float64, 2, 1, 3, params.number_simulations)
+        characteristics       = zeros(Float64, nsc, 1, ns + 1, params.number_simulations)
 
-        dm1s              = fill(NaN, 2, params.number_simulations, max_z1)
-        dm2s              = fill(NaN, 2, params.number_simulations, max_z2)
+        # dms[stratum]: (nsc, simulations, patients_in_stratum)
+        dms                   = [fill(NaN, nsc, params.number_simulations, max_z[k]) for k in 1:ns]
+        dlgs                  = [fill(NaN, nsc, params.number_simulations, max_z[k]) for k in 1:ns]
 
-        dlgz1s            = fill(NaN, 2, params.number_simulations, max_z1)
-        dlgz2s            = fill(NaN, 2, params.number_simulations, max_z2)
+        # d500s[scenario, simulation, stratum]
+        d500s                 = zeros(Float64, nsc, params.number_simulations, ns)
 
-        d500z1s           = zeros(Float64, 2, params.number_simulations)
-        d500z2s           = zeros(Float64, 2, params.number_simulations)
-
-        unfilled_slots_z1 = zeros(Float64, 1, params.number_simulations, max_z1)
-        unfilled_slots_z2 = zeros(Float64, 1, params.number_simulations, max_z2)
+        # unfilled_slots[stratum]: (1, simulations, patients_in_stratum) — F1a only
+        unfilled_slots        = [zeros(Float64, 1, params.number_simulations, max_z[k]) for k in 1:ns]
 
         # recruitment_times[scenario_offset, simulation] — arrival time of last patient
-        recruitment_times = zeros(Float64, 2, params.number_simulations)
+        recruitment_times     = zeros(Float64, nsc, params.number_simulations)
+
+        # avg_slots_skipped_f1a[stratum, simulation] — mean block positions skipped per FR event
+        avg_slots_skipped_f1a = zeros(Float64, ns, params.number_simulations)
 
         p = Progress(params.number_simulations)
         Threads.@threads for sim in 1:params.number_simulations
@@ -57,10 +59,10 @@ function run_simulation(params::SimParams)
             center_acts  = rand(0:4, params.centers)
             patients     = generate_patient_arrivals(center_rates, center_acts, params.centers, params.sample_size)
 
-            raw_blocks       = generate_treatment_blocks(params.allocation_ratio, params.sample_size, params.treatment_arms, params.block_size)
-            treatment_blocks = Matrix(transpose(reshape(raw_blocks, (params.sample_size, 2))))
+            raw_blocks       = generate_treatment_blocks(params.allocation_ratio, params.sample_size, params.treatment_arms, params.block_size, ns)
+            treatment_blocks = Matrix(transpose(reshape(raw_blocks, (params.sample_size, ns))))
 
-            strata = generate_strata_assignments(params.sample_size * 2, params.strata_assignment_probability)
+            strata = generate_strata_assignments(params.sample_size * 2, params.strata_probabilities)
 
             for (si, scenario) in enumerate(SCENARIOS_TO_RUN)
 
@@ -76,13 +78,13 @@ function run_simulation(params::SimParams)
                 total_cost  = params.centers * sum(init_supply) * params.kit_cost
 
                 S = Simulation(
-                    [Int16[] for _ in 1:2],
-                    zeros(Int16, 2),
+                    [Int16[] for _ in 1:ns],
+                    zeros(Int, ns),
                     Set{Int16}(),
-                    [Int16[] for _ in 1:2],
-                    zeros(Int16, 2),
-                    zeros(Int16, 2),
-                    [Set{Int16}() for _ in 1:2],
+                    [Int16[] for _ in 1:ns],
+                    zeros(Int, ns),
+                    zeros(Int, ns),
+                    [Set{Int16}() for _ in 1:ns],
                     params.sample_size,
                     center_supplies,
                     critical_pt,
@@ -90,13 +92,13 @@ function run_simulation(params::SimParams)
                     treatment_blocks,
                 )
 
-                next_supply_check  = params.resupply_period
-                next_resupply      = next_supply_check + params.resupply_time
-                sent_supply        = Dict{Int, Vector{Int}}()
-                tot_delayed        = zeros(Int16, 2)
-                num_waitlisted     = zeros(Int16, 2)
-                patients_per_stratum = zeros(Int16, 2)
-                break_loop         = false
+                next_supply_check    = params.resupply_period
+                next_resupply        = next_supply_check + params.resupply_time
+                sent_supply          = Dict{Int, Vector{Int}}()
+                tot_delayed          = zeros(Int, ns)
+                num_waitlisted       = zeros(Int, ns)
+                patients_per_stratum = zeros(Int, ns)
+                break_loop           = false
 
                 i = 1
                 while i <= S.num_patients
@@ -129,25 +131,26 @@ function run_simulation(params::SimParams)
                             end
                         end
 
-                        num_delayed   = [length(S.delayed_patients[1]), length(S.delayed_patients[2])]
+                        num_delayed   = [length(S.delayed_patients[k]) for k in 1:ns]
                         tot_delayed  .+= num_delayed
 
-                        for z in 1:2
+                        for z in 1:ns
                             cts = countmap(S.delayed_patients[z])
                             for (_, num) in cts
                                 num_waitlisted[z] += min(num, resupply_amt * params.treatment_arms)
                             end
                         end
 
-                        flattened_delayed = vcat(S.delayed_patients[1], S.delayed_patients[2])
+                        flattened_delayed = vcat([S.delayed_patients[z] for z in 1:ns]...)
 
                         for j in eachindex(flattened_delayed)
-                            new_delayed   = length(S.delayed_patients[1]) + length(S.delayed_patients[2]) - sum(num_delayed)
+                            new_delayed   = sum(length(S.delayed_patients[z]) for z in 1:ns) - sum(num_delayed)
                             patient_index = i - sum(S.patients_sent_home) - sum(tot_delayed) - new_delayed
                             stratum       = strata[patient_index]
                             center_delayed = Int16(flattened_delayed[j])
+                            other_strata_patients = sum(patients_per_stratum) - patients_per_stratum[stratum]
                             stratum_index = trunc(Int16,
-                                (i - patients_per_stratum[abs(stratum - 3)]) -
+                                (i - other_strata_patients) -
                                 S.patients_sent_home[stratum] -
                                 tot_delayed[stratum] -
                                 (length(S.delayed_patients[stratum]) - num_delayed[stratum])
@@ -159,22 +162,14 @@ function run_simulation(params::SimParams)
                                 allocate_f0b!(S, center_delayed, stratum, stratum_index)
                             elseif !backfill_enabled
                                 fr_allowed = allocate_f1a!(S, center_delayed, stratum, stratum_index)
-                                if stratum == 1
-                                    unfilled_slots_z1[si, sim, min(max_z1, stratum_index)] = S.treatments_skipped[1]
-                                else
-                                    unfilled_slots_z2[si, sim, min(max_z2, stratum_index)] = S.treatments_skipped[2]
-                                end
+                                unfilled_slots[stratum][1, sim, min(max_z[stratum], stratum_index)] = S.treatments_skipped[stratum]
                             else
                                 fr_allowed = allocate_f1b!(S, center_delayed, stratum, stratum_index)
                             end
 
                             patients_per_stratum[stratum] += 1
 
-                            if stratum == 1
-                                dlgz1s[si, sim, min(max_z1, stratum_index)] = compute_dlg(S, stratum, stratum_index)
-                            else
-                                dlgz2s[si, sim, min(max_z2, stratum_index)] = compute_dlg(S, stratum, stratum_index)
-                            end
+                            dlgs[stratum][si, sim, min(max_z[stratum], stratum_index)] = compute_dlg(S, stratum, stratum_index)
 
                             i += 1
                             if i > S.num_patients
@@ -184,8 +179,9 @@ function run_simulation(params::SimParams)
                             end
                         end
 
-                        S.delayed_patients[1] = S.delayed_patients[1][num_delayed[1]+1:end]
-                        S.delayed_patients[2] = S.delayed_patients[2][num_delayed[2]+1:end]
+                        for z in 1:ns
+                            S.delayed_patients[z] = S.delayed_patients[z][num_delayed[z]+1:end]
+                        end
                         next_resupply = next_supply_check + params.resupply_time
                         empty!(sent_supply)
                     end
@@ -194,11 +190,12 @@ function run_simulation(params::SimParams)
                         break
                     end
 
-                    current_delayed = length(S.delayed_patients[1]) + length(S.delayed_patients[2])
+                    current_delayed = sum(length(S.delayed_patients[z]) for z in 1:ns)
                     patient_index   = i + sum(S.treatments_skipped) - sum(S.patients_sent_home) - sum(tot_delayed) - current_delayed
                     stratum         = strata[patient_index]
+                    other_strata_patients = sum(patients_per_stratum) - patients_per_stratum[stratum]
                     stratum_index   = trunc(Int16,
-                        (i - patients_per_stratum[abs(stratum - 3)]) -
+                        (i - other_strata_patients) -
                         tot_delayed[stratum] -
                         length(S.delayed_patients[stratum])
                     )
@@ -209,22 +206,14 @@ function run_simulation(params::SimParams)
                         allocate_f0b!(S, center, stratum, stratum_index)
                     elseif !backfill_enabled
                         fr_allowed = allocate_f1a!(S, center, stratum, stratum_index)
-                        if stratum == 1
-                            unfilled_slots_z1[si, sim, min(max_z1, stratum_index)] = S.treatments_skipped[1]
-                        else
-                            unfilled_slots_z2[si, sim, min(max_z2, stratum_index)] = S.treatments_skipped[2]
-                        end
+                        unfilled_slots[stratum][1, sim, min(max_z[stratum], stratum_index)] = S.treatments_skipped[stratum]
                     else
                         fr_allowed = allocate_f1b!(S, center, stratum, stratum_index)
                     end
 
                     patients_per_stratum[stratum] += 1
 
-                    if stratum == 1
-                        dlgz1s[si, sim, min(max_z1, stratum_index)] = compute_dlg(S, stratum, stratum_index)
-                    else
-                        dlgz2s[si, sim, min(max_z2, stratum_index)] = compute_dlg(S, stratum, stratum_index)
-                    end
+                    dlgs[stratum][si, sim, min(max_z[stratum], stratum_index)] = compute_dlg(S, stratum, stratum_index)
 
                     i += 1
                 end  # patient loop
@@ -234,48 +223,44 @@ function run_simulation(params::SimParams)
 
                 normalise = (scenario == 7)
 
-                t1_z1 = 0; t2_z1 = 0
-                n1 = length(S.treatments_used[1])
-                for c in 1:n1
-                    if S.treatments_used[1][c] == 1; t1_z1 += 1 else t2_z1 += 1 end
-                    if c <= max_z1
-                        dm1s[si, sim, c] = normalise ? (t1_z1 - t2_z1) / sqrt(c) : Float64(t1_z1 - t2_z1)
+                for k in 1:ns
+                    t1 = 0; t2 = 0
+                    nk = length(S.treatments_used[k])
+                    for c in 1:nk
+                        if S.treatments_used[k][c] == 1; t1 += 1 else t2 += 1 end
+                        if c <= max_z[k]
+                            dms[k][si, sim, c] = normalise ? (t1 - t2) / sqrt(c) : Float64(t1 - t2)
+                        end
+                    end
+                    d500s[si, sim, k] = normalise ? Float64(t1 - t2) / sqrt(nk) : Float64(t1 - t2)
+                end
+
+                for k in 1:ns
+                    characteristics[si, 1, k, sim] = S.patients_force_allocated[k] / length(S.treatments_used[k])
+                end
+                characteristics[si, 1, ns + 1, sim] = sum(S.patients_force_allocated) / params.sample_size
+
+                if si == 1  # F1a only
+                    for z in 1:ns
+                        pfa = S.patients_force_allocated[z]
+                        avg_slots_skipped_f1a[z, sim] = pfa > 0 ? S.treatments_skipped[z] / pfa : 0.0
                     end
                 end
-                d500z1s[si, sim] = normalise ? Float64(t1_z1 - t2_z1) / sqrt(n1) : Float64(t1_z1 - t2_z1)
-
-                t1_z2 = 0; t2_z2 = 0
-                n2 = length(S.treatments_used[2])
-                for c in 1:n2
-                    if S.treatments_used[2][c] == 1; t1_z2 += 1 else t2_z2 += 1 end
-                    if c <= max_z2
-                        dm2s[si, sim, c] = normalise ? (t1_z2 - t2_z2) / sqrt(c) : Float64(t1_z2 - t2_z2)
-                    end
-                end
-                d500z2s[si, sim] = normalise ? Float64(t1_z2 - t2_z2) / sqrt(n2) : Float64(t1_z2 - t2_z2)
-
-                characteristics[si, 1, 1, sim] = S.patients_force_allocated[1] / length(S.treatments_used[1])
-                characteristics[si, 1, 2, sim] = S.patients_force_allocated[2] / length(S.treatments_used[2])
-                characteristics[si, 1, 3, sim] = sum(S.patients_force_allocated) / params.sample_size
 
             end  # scenario
             next!(p)
         end  # sim
 
         push!(all_results, (
-            beta              = BETA,
-            dm1s              = dm1s,
-            dm2s              = dm2s,
-            d500z1s           = d500z1s,
-            d500z2s           = d500z2s,
-            characteristics   = characteristics,
-            dlgz1s            = dlgz1s,
-            dlgz2s            = dlgz2s,
-            unfilled_slots_z1 = unfilled_slots_z1,
-            unfilled_slots_z2 = unfilled_slots_z2,
-            recruitment_times = recruitment_times,
-            max_z1            = max_z1,
-            max_z2            = max_z2,
+            beta                  = BETA,
+            dms                   = dms,
+            d500s                 = d500s,
+            characteristics       = characteristics,
+            dlgs                  = dlgs,
+            unfilled_slots        = unfilled_slots,
+            recruitment_times     = recruitment_times,
+            avg_slots_skipped_f1a = avg_slots_skipped_f1a,
+            max_z                 = max_z,
         ))
 
     end  # BETA
@@ -290,40 +275,44 @@ if !isdefined(Main, :PlutoRunner)
 params  = default_params()
 results = run_simulation(params)
 
-r = results[1]  # first (only) beta
+r  = results[1]  # first (only) beta
+ns = params.num_strata
 
-f1a_panels = [
-    imbalance_line_panel(r.dm1s[1:1, :, :],   "Var[dm(1)]",    var;        cutoff=r.max_z1, start=4),
-    imbalance_line_panel(r.dm2s[1:1, :, :],   "Var[dm(2)]",    var;        cutoff=r.max_z2, start=4),
-    imbalance_line_panel(r.dm1s[1:1, :, :],   "Q90[dm(1)]",    quantile_90; cutoff=r.max_z1, start=4),
-    imbalance_line_panel(r.dm2s[1:1, :, :],   "Q90[dm(2)]",    quantile_90; cutoff=r.max_z2, start=4),
-]
-save_line_summary(f1a_panels, 2, 2, joinpath("plots", "f1a_low.png"), "F1a Low Supply")
+plot_dir = isempty(params.run_label) ? "plots" : joinpath("plots", params.run_label)
+mkpath(plot_dir)
 
-f1b_panels = [
-    imbalance_line_panel(r.dm1s[2:2, :, :],   "Var[Dm(1)]",    var;        cutoff=r.max_z1, start=4),
-    imbalance_line_panel(r.dm2s[2:2, :, :],   "Var[Dm(2)]",    var;        cutoff=r.max_z2, start=4),
-    imbalance_line_panel(r.dm1s[2:2, :, :],   "Q90[Dm(1)]",    quantile_90; cutoff=r.max_z1, start=4),
-    imbalance_line_panel(r.dm2s[2:2, :, :],   "Q90[Dm(2)]",    quantile_90; cutoff=r.max_z2, start=4),
-    imbalance_line_panel(r.dlgz1s[2:2, :, :], "Q90[DLG(z=1)]", quantile_90; cutoff=r.max_z1),
-    imbalance_line_panel(r.dlgz2s[2:2, :, :], "Q90[DLG(z=2)]", quantile_90; cutoff=r.max_z2),
-    imbalance_line_panel(r.dlgz1s[2:2, :, :], "max[DLG(z=1)]", maximum;    cutoff=r.max_z1),
-    imbalance_line_panel(r.dlgz2s[2:2, :, :], "max[DLG(z=2)]", maximum;    cutoff=r.max_z2),
-]
-save_line_summary(f1b_panels, 4, 2, joinpath("plots", "f1b_low.png"), "F1b Low Supply")
+f1a_panels = []
+for k in 1:ns
+    push!(f1a_panels, imbalance_line_panel(r.dms[k][1:1, :, :], "Var[dm($k)]",    var;         cutoff=r.max_z[k], start=4))
+    push!(f1a_panels, imbalance_line_panel(r.dms[k][1:1, :, :], "Q90[dm($k)]",    quantile_90; cutoff=r.max_z[k], start=4))
+end
+save_line_summary(f1a_panels, ns, 2, joinpath(plot_dir, "f1a_low.png"), "F1a Low Supply")
 
-plot_imbalance_histograms(r.dm1s[1:1, :, :], r.dm2s[1:1, :, :], r.max_z1 - 4, r.max_z2 - 4,
-    joinpath("plots", "dm_hists_f1a.png"), "F1a Low"; num_panels=1, unnormalize=true)
-plot_imbalance_histograms(r.dm1s[2:2, :, :], r.dm2s[2:2, :, :], r.max_z1 - 4, r.max_z2 - 4,
-    joinpath("plots", "dm_hists_f1b.png"), "F1b Low")
+f1b_panels = []
+for k in 1:ns
+    push!(f1b_panels, imbalance_line_panel(r.dms[k][2:2, :, :],  "Var[Dm($k)]",     var;         cutoff=r.max_z[k], start=4))
+    push!(f1b_panels, imbalance_line_panel(r.dms[k][2:2, :, :],  "Q90[Dm($k)]",     quantile_90; cutoff=r.max_z[k], start=4))
+    push!(f1b_panels, imbalance_line_panel(r.dlgs[k][2:2, :, :], "Q90[DLG(z=$k)]",  quantile_90; cutoff=r.max_z[k]))
+    push!(f1b_panels, imbalance_line_panel(r.dlgs[k][2:2, :, :], "max[DLG(z=$k)]",  maximum;     cutoff=r.max_z[k]))
+end
+save_line_summary(f1b_panels, ns, 4, joinpath(plot_dir, "f1b_low.png"), "F1b Low Supply")
+
+plot_imbalance_histograms(
+    [r.dms[k][1:1, :, :] for k in 1:ns],
+    [r.max_z[k] - 4 for k in 1:ns],
+    joinpath(plot_dir, "dm_hists_f1a.png"), "F1a Low"; num_panels=1, unnormalize=true)
+plot_imbalance_histograms(
+    [r.dms[k][2:2, :, :] for k in 1:ns],
+    [r.max_z[k] - 4 for k in 1:ns],
+    joinpath(plot_dir, "dm_hists_f1b.png"), "F1b Low")
 
 plot_joint_normality_mahalanobis(
-    r.d500z1s[1, :], r.d500z2s[1, :],
-    joinpath("plots", "joint_normality_f1a.png"),
+    [r.d500s[1, :, k] for k in 1:ns],
+    joinpath(plot_dir, "joint_normality_f1a.png"),
     "F1a Low Supply — Joint Normality of End-of-Trial Imbalances",
 )
 
-open(joinpath("plots", "params.txt"), "w") do file
+open(joinpath(plot_dir, "params.txt"), "w") do file
     println(file, "Last run: ", Dates.now(), " US Eastern")
     println(file, "")
     println(file, "--- Scenarios Run ---")
@@ -352,7 +341,8 @@ open(joinpath("plots", "params.txt"), "w") do file
     println(file, "  BETA_OPTIONS                  = ", BETA_OPTIONS)
     println(file, "")
     println(file, "--- Stratification ---")
-    println(file, "  STRATA_ASSIGNMENT_PROBABILITY = ", STRATA_ASSIGNMENT_PROBABILITY)
+    println(file, "  NUM_STRATA                    = ", NUM_STRATA)
+    println(file, "  STRATA_PROBABILITIES          = ", STRATA_PROBABILITIES)
     println(file, "")
     println(file, "--- Simulation ---")
     println(file, "  NUMBER_SIMULATIONS            = ", NUMBER_SIMULATIONS)
@@ -363,16 +353,30 @@ open(joinpath("plots", "params.txt"), "w") do file
     println(file, "  High: RESUPPLY=", HIGH_RESUPPLY, ", INIT=", HIGH_INIT, ", CRITICAL=", HIGH_CRITICAL)
 end
 
-open(joinpath("plots", "output.txt"), "w") do file
-    print(file, @sprintf("Average FA (F1a low, z=1): %.4f\n", mean(r.characteristics[1, 1, 1, :])))
-    print(file, @sprintf("Average FA (F1a low, z=2): %.4f\n", mean(r.characteristics[1, 1, 2, :])))
-    print(file, @sprintf("Average FA (F1a low, tot): %.4f\n", mean(r.characteristics[1, 1, 3, :])))
-    print(file, @sprintf("Average FA (F1b low, z=1): %.4f\n", mean(r.characteristics[2, 1, 1, :])))
-    print(file, @sprintf("Average FA (F1b low, z=2): %.4f\n", mean(r.characteristics[2, 1, 2, :])))
-    print(file, @sprintf("Average FA (F1b low, tot): %.4f\n", mean(r.characteristics[2, 1, 3, :])))
-
+open(joinpath(plot_dir, "output.txt"), "w") do file
+    for k in 1:ns
+        print(file, @sprintf("Average FA (F1a low, z=%d): %.4f\n", k, mean(r.characteristics[1, 1, k, :])))
+    end
+    print(file, @sprintf("Average FA (F1a low, tot): %.4f\n", mean(r.characteristics[1, 1, ns + 1, :])))
+    for k in 1:ns
+        print(file, @sprintf("Average FA (F1b low, z=%d): %.4f\n", k, mean(r.characteristics[2, 1, k, :])))
+    end
+    print(file, @sprintf("Average FA (F1b low, tot): %.4f\n", mean(r.characteristics[2, 1, ns + 1, :])))
+    println(file, "")
+    for k in 1:ns
+        print(file, @sprintf("Avg slots skipped/FR (F1a low, z=%d): %.4f\n", k, mean(r.avg_slots_skipped_f1a[k, :])))
+    end
+    println(file, "")
+    for k in 1:ns
+        dm_vals = r.d500s[1, :, k]
+        print(file, @sprintf("Mean norm imbalance  (F1a low, z=%d): %.4f\n", k, mean(dm_vals)))
+        print(file, @sprintf("Var  norm imbalance  (F1a low, z=%d): %.4f\n", k, var(dm_vals)))
+    end
+    print(file, @sprintf("Mean norm imbalance  (F1a low, overall): %.4f\n", mean(r.d500s[1, :, :])))
+    print(file, @sprintf("Var  norm imbalance  (F1a low, overall): %.4f\n", var(r.d500s[1, :, :])))
+    println(file, "")
     for (label, idx) in [("F1a Low", 1), ("F1b Low", 2)]
-        A = cov(hcat(r.d500z1s[idx, :], r.d500z2s[idx, :]))
+        A = cov(hcat([r.d500s[idx, :, k] for k in 1:ns]...))
         println(file, "Var-Cov $label: ", A)
         println(file, "\tEigenvalues: ", eigvals(A))
     end
