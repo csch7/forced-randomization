@@ -1,0 +1,21 @@
+Average FA (F1a low, z=1): 0.1755
+Average FA (F1a low, z=2): 0.1762
+Average FA (F1a low, tot): 0.1758
+Average FA (F1b low, z=1): 0.1738
+Average FA (F1b low, z=2): 0.1750
+Average FA (F1b low, tot): 0.1743
+
+Avg slots skipped/FR (F1a low, z=1): 1.6090
+Avg slots skipped/FR (F1a low, z=2): 1.6175
+
+Mean norm imbalance  (F1a low, z=1): -0.0145
+Var  norm imbalance  (F1a low, z=1): 0.3302
+Mean norm imbalance  (F1a low, z=2): 0.0204
+Var  norm imbalance  (F1a low, z=2): 0.3654
+Mean norm imbalance  (F1a low, overall): 0.0030
+Var  norm imbalance  (F1a low, overall): 0.3479
+
+Var-Cov F1a Low: [0.33024117540829245 -0.12166188346953014; -0.12166188346953014 0.3653936747274133]
+	Eigenvalues: [0.22489249496232577, 0.47074235517338]
+Var-Cov F1b Low: [1.7526716716716686 -0.1237447447447448; -0.1237447447447448 1.647886886886887]
+	Eigenvalues: [1.5659002458233837, 1.8346583127351719]
