@@ -1,8 +1,8 @@
 # ── Trial Design ────────────────────────────────────────────────────────────
-const SAMPLE_SIZE                   = 2004
+const SAMPLE_SIZE                   = 8000
 const TREATMENT_ARMS                = 2
 const ALLOCATION_RATIO              = (1, 1)
-const BLOCK_SIZE                    = 12
+const BLOCK_SIZE                    = 4
 const CENTERS                       = 80
 
 # ── Resupply Logistics ───────────────────────────────────────────────────────
@@ -24,13 +24,13 @@ const STRATA_PROBABILITIES          = [0.6, 0.4]  # one weight per stratum, must
 
 # ── Simulation ───────────────────────────────────────────────────────────────
 const NUMBER_SIMULATIONS            = 1000
-const RUN_LABEL                     = "17-%FA_2-Strata_12-PBS"   # set to e.g. "low_beta3" to save plots in plots/low_beta3/
+const RUN_LABEL                     = "5-%FA_2-Strata_4-PBS_8k"   # set to e.g. "low_beta3" to save plots in plots/low_beta3/
 
 # ── Supply Strategy Parameters ───────────────────────────────────────────────
 # Low supply
-const LOW_RESUPPLY                  = 1
-const LOW_INIT                      = [1, 1]
-const LOW_CRITICAL                  = 0
+const LOW_RESUPPLY                  = 2
+const LOW_INIT                      = [2, 2]
+const LOW_CRITICAL                  = 1
 
 # Medium supply
 const MED_RESUPPLY                  = 4
