@@ -1,0 +1,10 @@
+name: rshiny
+title:
+username: forced-randomization
+account: forced-randomization
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17406019
+bundleId: 12028647
+url: https://forced-randomization.shinyapps.io/rshiny/
+version: 1
