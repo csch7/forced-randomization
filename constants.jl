@@ -1,5 +1,5 @@
 # ── Trial Design ────────────────────────────────────────────────────────────
-const SAMPLE_SIZE                   = 8000
+const SAMPLE_SIZE                   = 500
 const TREATMENT_ARMS                = 2
 const ALLOCATION_RATIO              = (1, 1)
 const BLOCK_SIZE                    = 4
@@ -23,7 +23,7 @@ const NUM_STRATA                    = 2
 const STRATA_PROBABILITIES          = [0.6, 0.4]  # one weight per stratum, must sum to 1
 
 # ── Simulation ───────────────────────────────────────────────────────────────
-const NUMBER_SIMULATIONS            = 1000
+const NUMBER_SIMULATIONS            = 2000
 const RUN_LABEL                     = "5-%FA_2-Strata_4-PBS_8k"   # set to e.g. "low_beta3" to save plots in plots/low_beta3/
 
 # ── Supply Strategy Parameters ───────────────────────────────────────────────
